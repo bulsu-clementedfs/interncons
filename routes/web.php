@@ -50,6 +50,12 @@ Route::middleware(['auth', 'verified', 'role:hte'])->group(function () {
     })->name('form');
 });
 
+Route::middleware(['auth', 'verified', 'role:adviser'])->group(function () {
+    Route::get('application', function () {
+        return Inertia::render('adviser/application');
+    })->name('application');
+ });
+
 Route::group(['middleware' => ['auth', 'verified', 'role:student']], function () {
     Route::get('assessment', function () {
         $subcategories = SubCategory::with(['questions' => function ($query) {
