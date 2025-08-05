@@ -66,12 +66,70 @@ Route::group(['middleware' => ['auth', 'verified', 'role:student']], function ()
             'hasSubmitted' => $hasSubmitted
         ]);
     })->name('assessment');
-    
+
+    Route::get('profile', function () {
+        $user = Auth::user();
+        $student = $user->student;
+        
+        if (!$student) {
+            return Inertia::render('student/profile', [
+                'student' => null,
+                'categories' => []
+            ]);
+        }
+
+        // Get all categories with their subcategories and scores
+        $categories = \App\Models\Category::with(['subCategory' => function ($query) use ($student) {
+            $query->with(['studentScores' => function ($scoreQuery) use ($student) {
+                $scoreQuery->where('student_id', $student->id);
+            }]);
+        }])->get();
+
+        $profileData = [
+            'student' => [
+                'id' => $student->id,
+                'student_number' => $student->student_number,
+                'first_name' => $student->first_name,
+                'last_name' => $student->last_name,
+                'middle_name' => $student->middle_name,
+                'phone' => $student->phone,
+                'section' => $student->section,
+                'specialization' => $student->specialization,
+                'address' => $student->address,
+                'birth_date' => $student->birth_date,
+                'is_submit' => $student->is_submit,
+            ],
+            'categories' => []
+        ];
+
+        foreach ($categories as $category) {
+            $categoryData = [
+                'id' => $category->id,
+                'name' => $category->category_name,
+                'subcategories' => []
+            ];
+
+            foreach ($category->subCategory as $subcategory) {
+                $score = $subcategory->studentScores->first();
+                $categoryData['subcategories'][] = [
+                    'id' => $subcategory->id,
+                    'name' => $subcategory->subcategory_name,
+                    'score' => $score ? round($score->score, 2) : 0,
+                ];
+            }
+
+            $profileData['categories'][] = $categoryData;
+        }
+
+        return Inertia::render('student/profile', $profileData);
+    })->name('profile');
+
     Route::post('assessment', [AssessmentController::class, 'store'])->name('assessment.store');
     Route::get('assessment/language-proficiency', [AssessmentController::class, 'getLanguageProficiency'])->name('assessment.language-proficiency');
     Route::get('assessment/technical-skills', [AssessmentController::class, 'getTechnicalSkills'])->name('assessment.technical-skills');
     Route::get('assessment/soft-skills', [AssessmentController::class, 'getSoftSkills'])->name('assessment.soft-skills');
 });
+
 
 
 require __DIR__.'/settings.php';
