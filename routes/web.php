@@ -3,6 +3,8 @@
 use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\AdviserController;
+use App\Http\Controllers\HTEController;
+use App\Models\Category;
 use App\Models\Question;
 use App\Models\SubCategory;
 use Illuminate\Support\Facades\Auth;
@@ -47,8 +49,18 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
 
 Route::middleware(['auth', 'verified', 'role:hte'])->group(function () {
     Route::get('form', function () {
-        return Inertia::render('hte/form');
+        // Get all categories with their subcategories and questions
+        $categories = Category::with(['subCategory' => function ($query) {
+            $query->with(['questions' => function ($questionQuery) {
+                $questionQuery->where('access', 'HTE')->where('is_active', true);
+            }]);
+        }])->get();
+
+        return Inertia::render('hte/form', [
+            'categories' => $categories
+        ]);
     })->name('form');
+    Route::post('hte/submit', [App\Http\Controllers\HTEController::class, 'submit'])->name('hte.submit');
 });
 
 Route::middleware(['auth', 'verified', 'role:adviser'])->group(function () {
@@ -131,6 +143,7 @@ Route::group(['middleware' => ['auth', 'verified', 'role:student']], function ()
     Route::get('assessment/technical-skills', [AssessmentController::class, 'getTechnicalSkills'])->name('assessment.technical-skills');
     Route::get('assessment/soft-skills', [AssessmentController::class, 'getSoftSkills'])->name('assessment.soft-skills');
 });
+
 
 
 

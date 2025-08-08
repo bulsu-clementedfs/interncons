@@ -121,6 +121,14 @@ class CategorySeeder extends Seeder
                         'access' => 'Student', // Default access
                         'is_active' => true
                     ]);
+                    
+                    // Also create HTE version of the question
+                    Question::firstOrCreate([
+                        'question' => $questionText,
+                        'subcategory_id' => $subCategory->id,
+                        'access' => 'HTE',
+                        'is_active' => true
+                    ]);
                 }
             }
         }

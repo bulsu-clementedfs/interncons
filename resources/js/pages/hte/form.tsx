@@ -3,12 +3,14 @@ import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useState, useEffect } from 'react';
-import { Path, useForm } from 'react-hook-form';
+import { Path, useForm, useFieldArray } from 'react-hook-form';
 import { z } from 'zod';
 import { router, usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
+import { Trash2, Plus } from 'lucide-react';
+import CriteriaStep from '@/components/form/hte/criteria-step';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -16,6 +18,16 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: '/hte/form',
     },
 ];
+
+// Internship slot schema
+const InternshipSlotSchema = z.object({
+    position: z.string().min(1, 'Position is required'),
+    department: z.string().min(1, 'Department is required'),
+    slotCount: z.string().min(1, 'Number of slots is required'),
+    placementDescription: z.string().min(1, 'Placement description is required'),
+    startDate: z.string().min(1, 'Start date is required'),
+    endDate: z.string().min(1, 'End date is required'),
+});
 
 // Form validation schema
 const FormSchema = z.object({
@@ -26,27 +38,32 @@ const FormSchema = z.object({
     phone: z.string().min(1, 'Phone number is required'),
     address: z.string().min(1, 'Address is required'),
     
-    // Internship Offered
-    position: z.string().min(1, 'Position is required'),
-    department: z.string().min(1, 'Department is required'),
-    numberOfInterns: z.string().min(1, 'Number of interns is required'),
-    duration: z.string().min(1, 'Duration is required'),
-    startDate: z.string().min(1, 'Start date is required'),
-    endDate: z.string().min(1, 'End date is required'),
+    // Internship Offered - Array of internship slots
+    internships: z.array(InternshipSlotSchema).min(1, 'At least one internship slot is required'),
     
     // Criteria
     minimumGPA: z.string().min(1, 'Minimum GPA is required'),
     requiredSkills: z.string().min(1, 'Required skills are required'),
     preferredMajors: z.string().optional(),
     additionalRequirements: z.string().optional(),
+    
+    // Weight assignments
+    categoryWeights: z.record(z.number(), z.number()).optional(),
+    subcategoryWeights: z.record(z.number(), z.record(z.number(), z.number())).optional(),
 });
 
 type FormData = z.infer<typeof FormSchema>;
 
 export default function HTEForm() {
-    const { flash } = usePage<{ flash: { success?: string; error?: string } }>().props;
+    const { flash, categories } = usePage<{ 
+        flash: { success?: string; error?: string };
+        categories: any[];
+    }>().props;
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Debug logging
+    console.log('HTE Form - Categories:', categories);
 
     // Check for success message on mount
     useEffect(() => {
@@ -71,17 +88,28 @@ export default function HTEForm() {
             email: '',
             phone: '',
             address: '',
-            position: '',
-            department: '',
-            numberOfInterns: '',
-            duration: '',
-            startDate: '',
-            endDate: '',
+            internships: [
+                {
+                    position: '',
+                    department: '',
+                    slotCount: '',
+                    placementDescription: '',
+                    startDate: '',
+                    endDate: '',
+                }
+            ],
             minimumGPA: '',
             requiredSkills: '',
             preferredMajors: '',
             additionalRequirements: '',
+            categoryWeights: {},
+            subcategoryWeights: {},
         },
+    });
+
+    const { fields, append, remove } = useFieldArray({
+        control: form.control,
+        name: 'internships',
     });
 
     function onSubmit(values: FormData) {
@@ -113,10 +141,20 @@ export default function HTEForm() {
                 fieldsToValidate = ['companyName', 'contactPerson', 'email', 'phone', 'address'];
                 break;
             case 1: // Internship Offered
-                fieldsToValidate = ['position', 'department', 'numberOfInterns', 'duration', 'startDate', 'endDate'];
+                // Validate all internship fields
+                const internshipFields = fields.flatMap((_, index) => [
+                    `internships.${index}.position`,
+                    `internships.${index}.department`,
+                    `internships.${index}.slotCount`,
+                    `internships.${index}.placementDescription`,
+                    `internships.${index}.startDate`,
+                    `internships.${index}.endDate`,
+                ] as Path<FormData>[]);
+                fieldsToValidate = internshipFields;
                 break;
             case 2: // Criteria
                 fieldsToValidate = ['minimumGPA', 'requiredSkills'];
+                // Note: Weight validation will be handled in the component
                 break;
         }
 
@@ -127,6 +165,23 @@ export default function HTEForm() {
             }
         } else {
             setCurrentStep((prev) => prev + 1);
+        }
+    };
+
+    const addInternshipSlot = () => {
+        append({
+            position: '',
+            department: '',
+            slotCount: '',
+            placementDescription: '',
+            startDate: '',
+            endDate: '',
+        });
+    };
+
+    const removeInternshipSlot = (index: number) => {
+        if (fields.length > 1) {
+            remove(index);
         }
     };
 
@@ -150,7 +205,7 @@ export default function HTEForm() {
                                     </div>
                                     <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">HTE Form Submitted Successfully!</h2>
                                     <p className="text-gray-600 dark:text-gray-400">
-                                        Thank you for submitting your HTE form. Your internship opportunity has been recorded and will be available for student matching.
+                                        Thank you for submitting your HTE form. Your internship opportunities have been recorded and will be available for student matching.
                                     </p>
                                 </div>
                             </div>
@@ -239,75 +294,115 @@ export default function HTEForm() {
 
                                 {currentStep === 1 && (
                                     <div className="space-y-6">
-                                        <h2 className="text-xl font-semibold">Internship Offered</h2>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium mb-2">Position</label>
-                                                <input
-                                                    {...form.register('position')}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter position title"
-                                                />
-                                                {form.formState.errors.position && (
-                                                    <p className="text-red-500 text-sm mt-1">{form.formState.errors.position.message}</p>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium mb-2">Department</label>
-                                                <input
-                                                    {...form.register('department')}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter department"
-                                                />
-                                                {form.formState.errors.department && (
-                                                    <p className="text-red-500 text-sm mt-1">{form.formState.errors.department.message}</p>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium mb-2">Number of Interns</label>
-                                                <input
-                                                    {...form.register('numberOfInterns')}
-                                                    type="number"
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="Enter number of interns needed"
-                                                />
-                                                {form.formState.errors.numberOfInterns && (
-                                                    <p className="text-red-500 text-sm mt-1">{form.formState.errors.numberOfInterns.message}</p>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium mb-2">Duration</label>
-                                                <input
-                                                    {...form.register('duration')}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="e.g., 3 months, 6 months"
-                                                />
-                                                {form.formState.errors.duration && (
-                                                    <p className="text-red-500 text-sm mt-1">{form.formState.errors.duration.message}</p>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium mb-2">Start Date</label>
-                                                <input
-                                                    {...form.register('startDate')}
-                                                    type="date"
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                />
-                                                {form.formState.errors.startDate && (
-                                                    <p className="text-red-500 text-sm mt-1">{form.formState.errors.startDate.message}</p>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium mb-2">End Date</label>
-                                                <input
-                                                    {...form.register('endDate')}
-                                                    type="date"
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                />
-                                                {form.formState.errors.endDate && (
-                                                    <p className="text-red-500 text-sm mt-1">{form.formState.errors.endDate.message}</p>
-                                                )}
-                                            </div>
+                                        <div className="flex justify-between items-center">
+                                            <h2 className="text-xl font-semibold">Internship Offered</h2>
+                                            <Button
+                                                type="button"
+                                                onClick={addInternshipSlot}
+                                                variant="outline"
+                                                size="sm"
+                                                className="flex items-center gap-2"
+                                            >
+                                                <Plus className="h-4 w-4" />
+                                                Add Slot
+                                            </Button>
+                                        </div>
+                                        
+                                        {form.formState.errors.internships && (
+                                            <p className="text-red-500 text-sm">{form.formState.errors.internships.message}</p>
+                                        )}
+
+                                        <div className="space-y-6">
+                                            {fields.map((field, index) => (
+                                                <div key={field.id} className="border border-gray-200 rounded-lg p-6 bg-gray-50">
+                                                    <div className="flex justify-between items-center mb-4">
+                                                        <h3 className="text-lg font-medium">Internship Slot {index + 1}</h3>
+                                                        {fields.length > 1 && (
+                                                            <Button
+                                                                type="button"
+                                                                onClick={() => removeInternshipSlot(index)}
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="text-red-600 hover:text-red-700"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label className="block text-sm font-medium mb-2">Position Title *</label>
+                                                            <input
+                                                                {...form.register(`internships.${index}.position`)}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                placeholder="Enter position title"
+                                                            />
+                                                            {form.formState.errors.internships?.[index]?.position && (
+                                                                <p className="text-red-500 text-sm mt-1">{form.formState.errors.internships[index]?.position?.message}</p>
+                                                            )}
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-medium mb-2">Department *</label>
+                                                            <input
+                                                                {...form.register(`internships.${index}.department`)}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                placeholder="Enter department"
+                                                            />
+                                                            {form.formState.errors.internships?.[index]?.department && (
+                                                                <p className="text-red-500 text-sm mt-1">{form.formState.errors.internships[index]?.department?.message}</p>
+                                                            )}
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-medium mb-2">Number of Slots *</label>
+                                                            <input
+                                                                {...form.register(`internships.${index}.slotCount`)}
+                                                                type="number"
+                                                                min="1"
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                placeholder="Enter number of slots"
+                                                            />
+                                                            {form.formState.errors.internships?.[index]?.slotCount && (
+                                                                <p className="text-red-500 text-sm mt-1">{form.formState.errors.internships[index]?.slotCount?.message}</p>
+                                                            )}
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-medium mb-2">Start Date *</label>
+                                                            <input
+                                                                {...form.register(`internships.${index}.startDate`)}
+                                                                type="date"
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                            />
+                                                            {form.formState.errors.internships?.[index]?.startDate && (
+                                                                <p className="text-red-500 text-sm mt-1">{form.formState.errors.internships[index]?.startDate?.message}</p>
+                                                            )}
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-medium mb-2">End Date *</label>
+                                                            <input
+                                                                {...form.register(`internships.${index}.endDate`)}
+                                                                type="date"
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                            />
+                                                            {form.formState.errors.internships?.[index]?.endDate && (
+                                                                <p className="text-red-500 text-sm mt-1">{form.formState.errors.internships[index]?.endDate?.message}</p>
+                                                            )}
+                                                        </div>
+                                                        <div className="md:col-span-2">
+                                                            <label className="block text-sm font-medium mb-2">Placement Description *</label>
+                                                            <textarea
+                                                                {...form.register(`internships.${index}.placementDescription`)}
+                                                                rows={3}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                placeholder="Describe the internship placement, responsibilities, and learning opportunities"
+                                                            />
+                                                            {form.formState.errors.internships?.[index]?.placementDescription && (
+                                                                <p className="text-red-500 text-sm mt-1">{form.formState.errors.internships[index]?.placementDescription?.message}</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 )}
@@ -337,7 +432,7 @@ export default function HTEForm() {
                                                     {...form.register('requiredSkills')}
                                                     rows={3}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="List required technical skills, software, etc."
+                                                    placeholder="List required technical skills, software, software, etc."
                                                 />
                                                 {form.formState.errors.requiredSkills && (
                                                     <p className="text-red-500 text-sm mt-1">{form.formState.errors.requiredSkills.message}</p>
@@ -362,6 +457,17 @@ export default function HTEForm() {
                                                 />
                                             </div>
                                         </div>
+                                        
+                                        {/* Weight Assignment Section */}
+                                        <div className="mt-8">
+                                            {categories && Array.isArray(categories) ? (
+                                                <CriteriaStep form={form} categories={categories} />
+                                            ) : (
+                                                <div className="text-amber-600 bg-amber-50 p-4 rounded border">
+                                                    Loading categories...
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
 
@@ -372,12 +478,27 @@ export default function HTEForm() {
                                             <h3 className="font-medium mb-4">Form Summary</h3>
                                             <div className="space-y-3 text-sm">
                                                 <div><strong>Company:</strong> {form.watch('companyName')}</div>
-                                                <div><strong>Position:</strong> {form.watch('position')}</div>
-                                                <div><strong>Department:</strong> {form.watch('department')}</div>
-                                                <div><strong>Duration:</strong> {form.watch('duration')}</div>
-                                                <div><strong>Number of Interns:</strong> {form.watch('numberOfInterns')}</div>
+                                                <div><strong>Contact Person:</strong> {form.watch('contactPerson')}</div>
+                                                <div><strong>Email:</strong> {form.watch('email')}</div>
+                                                <div><strong>Phone:</strong> {form.watch('phone')}</div>
+                                                <div><strong>Number of Internship Slots:</strong> {form.watch('internships')?.length || 0}</div>
                                                 <div><strong>Minimum GPA:</strong> {form.watch('minimumGPA')}</div>
                                             </div>
+                                            
+                                            {/* Display internship slots summary */}
+                                            {form.watch('internships') && form.watch('internships').length > 0 && (
+                                                <div className="mt-4">
+                                                    <h4 className="font-medium mb-2">Internship Slots:</h4>
+                                                    <div className="space-y-2">
+                                                        {form.watch('internships').map((internship, index) => (
+                                                            <div key={index} className="text-sm bg-white p-2 rounded border">
+                                                                <div><strong>Slot {index + 1}:</strong> {internship.position} - {internship.department}</div>
+                                                                <div>Slots: {internship.slotCount} | Duration: {internship.startDate} to {internship.endDate}</div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                         <Button type="submit" disabled={isSubmitting} className="w-full">
                                             {isSubmitting ? 'Submitting...' : 'Submit HTE Form'}

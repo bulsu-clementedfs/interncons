@@ -47,6 +47,22 @@ class HTE extends Model
     }
 
     /**
+     * Get the category weights for the HTE.
+     */
+    public function categoryWeights(): HasMany
+    {
+        return $this->hasMany(CategoryWeight::class, 'h_t_e_id');
+    }
+
+    /**
+     * Get the subcategory weights for the HTE.
+     */
+    public function subcategoryWeights(): HasMany
+    {
+        return $this->hasMany(SubcategoryWeight::class, 'h_t_e_id');
+    }
+
+    /**
      * Get the full name of the contact person.
      */
     public function getContactPersonFullNameAttribute(): string
