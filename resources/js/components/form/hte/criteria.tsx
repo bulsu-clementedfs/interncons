@@ -1,0 +1,328 @@
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Button } from '@/components/ui/button';
+import { useFormContext } from 'react-hook-form';
+import { useState, useEffect } from 'react';
+import { ChevronDownIcon, ChevronRightIcon } from '@radix-ui/react-icons';
+
+interface Category {
+    id: number;
+    category_name: string;
+    subCategory: SubCategory[];
+}
+
+interface SubCategory {
+    id: number;
+    subcategory_name: string;
+    questions: Question[];
+}
+
+interface Question {
+    id: number;
+    question: string;
+    access: string;
+    is_active: boolean;
+}
+
+export default function Criteria() {
+    const { control, watch, setValue } = useFormContext();
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
+    const [expandedSubcategories, setExpandedSubcategories] = useState<Set<number>>(new Set());
+    const [loading, setLoading] = useState(true);
+
+    // Watch the weight values for validation
+    const categoryWeights: Record<string, number> = watch('categoryWeights') || {};
+    const subcategoryWeights: Record<string, number> = watch('subcategoryWeights') || {};
+
+    useEffect(() => {
+        // Fetch categories from the API
+        fetch('/hte/categories')
+            .then(response => response.json())
+            .then(data => {
+                setCategories(data);
+                setLoading(false);
+            })
+            .catch(error => {
+                console.error('Error fetching categories:', error);
+                setLoading(false);
+            });
+    }, []);
+
+    const toggleCategory = (categoryId: number) => {
+        const newExpanded = new Set(expandedCategories);
+        if (newExpanded.has(categoryId)) {
+            newExpanded.delete(categoryId);
+        } else {
+            newExpanded.add(categoryId);
+        }
+        setExpandedCategories(newExpanded);
+    };
+
+    const toggleSubcategory = (subcategoryId: number) => {
+        const newExpanded = new Set(expandedSubcategories);
+        if (newExpanded.has(subcategoryId)) {
+            newExpanded.delete(subcategoryId);
+        } else {
+            newExpanded.add(subcategoryId);
+        }
+        setExpandedSubcategories(newExpanded);
+    };
+
+    const handleCategoryWeightChange = (categoryId: number, weight: number) => {
+        setValue(`categoryWeights.${categoryId}`, weight);
+    };
+
+    const handleSubcategoryWeightChange = (subcategoryId: number, weight: number) => {
+        setValue(`subcategoryWeights.${subcategoryId}`, weight);
+    };
+
+    const calculateCategoryTotalWeight = () => {
+        return Object.values(categoryWeights).reduce((sum: number, weight: number) => sum + weight, 0);
+    };
+
+    const calculateSubcategoryTotalWeight = (categoryId: number) => {
+        const category = categories.find(cat => cat.id === categoryId);
+        if (!category) return 0;
+        
+        return category.subCategory.reduce((sum, subcat) => {
+            const weight = subcategoryWeights[subcat.id] || 0;
+            return sum + (Number(weight) || 0);
+        }, 0);
+    };
+
+    const getWeightValidationColor = (total: number) => {
+        if (total === 100) return 'text-green-600';
+        if (total > 100) return 'text-red-600';
+        return 'text-yellow-600';
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center p-8">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+                    <p className="mt-2 text-gray-600">Loading criteria...</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6">
+            <div className="space-y-4">
+                <h2 className="text-xl font-semibold">Assessment Criteria and Weights</h2>
+                <p className="text-gray-600">
+                    Assign weights to categories and subcategories. Each category must total 100%, and subcategories within each category must also total 100%.
+                </p>
+                
+                {/* Category Weights Summary */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="font-medium mb-2">Category Weights Summary</h3>
+                    <div className="flex items-center gap-4">
+                        <span>Total: {calculateCategoryTotalWeight()}%</span>
+                        <span className={getWeightValidationColor(calculateCategoryTotalWeight())}>
+                            {calculateCategoryTotalWeight() === 100 ? '✓ Valid' : 
+                             calculateCategoryTotalWeight() > 100 ? '✗ Exceeds 100%' : '⚠ Incomplete'}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div className="space-y-4">
+                {categories.map((category) => {
+                    const isExpanded = expandedCategories.has(category.id);
+                    const categoryWeight = categoryWeights[category.id] || 0;
+                    const subcategoryTotal = calculateSubcategoryTotalWeight(category.id);
+                    
+                    return (
+                        <div key={category.id} className="border rounded-lg">
+                            <Collapsible open={isExpanded} onOpenChange={() => toggleCategory(category.id)}>
+                                <CollapsibleTrigger asChild>
+                                    <Button 
+                                        variant="ghost" 
+                                        className="w-full justify-between p-4 h-auto"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            {isExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+                                            <span className="font-medium">{category.category_name}</span>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <div className="flex items-center gap-2">
+                                                <span>Weight:</span>
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    max="100"
+                                                    value={categoryWeight}
+                                                    onChange={(e) => handleCategoryWeightChange(category.id, Number(e.target.value))}
+                                                    className="w-20"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                />
+                                                <span>%</span>
+                                            </div>
+                                        </div>
+                                    </Button>
+                                </CollapsibleTrigger>
+                                
+                                <CollapsibleContent className="p-4 border-t">
+                                    <div className="space-y-4">
+                                        {/* Subcategory Total Weight */}
+                                        <div className="bg-blue-50 p-3 rounded">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm font-medium">Subcategory Total: {subcategoryTotal}%</span>
+                                                <span className={`text-sm ${getWeightValidationColor(subcategoryTotal)}`}>
+                                                    {subcategoryTotal === 100 ? '✓ Valid' : 
+                                                     subcategoryTotal > 100 ? '✗ Exceeds 100%' : '⚠ Incomplete'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Subcategories */}
+                                        <div className="space-y-3">
+                                            {category.subCategory.map((subcategory) => {
+                                                const isSubExpanded = expandedSubcategories.has(subcategory.id);
+                                                const subcategoryWeight = subcategoryWeights[subcategory.id] || 0;
+                                                
+                                                return (
+                                                    <div key={subcategory.id} className="border rounded-lg">
+                                                        <Collapsible open={isSubExpanded} onOpenChange={() => toggleSubcategory(subcategory.id)}>
+                                                            <CollapsibleTrigger asChild>
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    className="w-full justify-between p-3 h-auto"
+                                                                >
+                                                                    <div className="flex items-center gap-2">
+                                                                        {isSubExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+                                                                        <span className="font-medium">{subcategory.subcategory_name}</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-4">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span>Weight:</span>
+                                                                            <Input
+                                                                                type="number"
+                                                                                min="0"
+                                                                                max="100"
+                                                                                value={subcategoryWeight}
+                                                                                onChange={(e) => handleSubcategoryWeightChange(subcategory.id, Number(e.target.value))}
+                                                                                className="w-20"
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                            />
+                                                                            <span>%</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </Button>
+                                                            </CollapsibleTrigger>
+                                                            
+                                                            <CollapsibleContent className="p-3 border-t">
+                                                                <div className="space-y-2">
+                                                                    <h4 className="font-medium text-sm text-gray-700">Questions:</h4>
+                                                                    <div className="space-y-2">
+                                                                        {subcategory.questions.map((question) => (
+                                                                            <div key={question.id} className="text-sm text-gray-600 pl-4">
+                                                                                • {question.question}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            </CollapsibleContent>
+                                                        </Collapsible>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </CollapsibleContent>
+                            </Collapsible>
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Basic Information Fields */}
+            <div className="space-y-4 border-t pt-6">
+                <h3 className="text-lg font-semibold">Additional Requirements</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                        control={control}
+                        name="minimumGPA"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Minimum GPA</FormLabel>
+                                <FormControl>
+                                    <Input 
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        max="4"
+                                        placeholder="e.g., 2.5"
+                                        {...field}
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    
+                    <FormField
+                        control={control}
+                        name="requiredSkills"
+                        render={({ field }) => (
+                            <FormItem className="md:col-span-2">
+                                <FormLabel>Required Skills</FormLabel>
+                                <FormControl>
+                                    <textarea 
+                                        placeholder="List required technical skills, software, etc."
+                                        rows={3}
+                                        className="border-input file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground flex w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"
+                                        {...field}
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    
+                    <FormField
+                        control={control}
+                        name="preferredMajors"
+                        render={({ field }) => (
+                            <FormItem className="md:col-span-2">
+                                <FormLabel>Preferred Majors (Optional)</FormLabel>
+                                <FormControl>
+                                    <textarea 
+                                        placeholder="List preferred majors or fields of study"
+                                        rows={3}
+                                        className="border-input file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground flex w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"
+                                        {...field}
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    
+                    <FormField
+                        control={control}
+                        name="additionalRequirements"
+                        render={({ field }) => (
+                            <FormItem className="md:col-span-2">
+                                <FormLabel>Additional Requirements (Optional)</FormLabel>
+                                <FormControl>
+                                    <textarea 
+                                        placeholder="Any additional requirements or preferences"
+                                        rows={3}
+                                        className="border-input file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground flex w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"
+                                        {...field}
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                </div>
+            </div>
+        </div>
+    );
+}

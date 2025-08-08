@@ -16,9 +16,9 @@ return new class extends Migration
         Schema::create('subcategory_weights', function (Blueprint $table) {
             $table->id();
             $table->foreignIdFor(HTE::class)->constrained()->cascadeOnDelete();
-            $table->foreignIdFor(Subcategory::class)->constrained()->cascadeOnDelete();
+            $table->foreignIdFor(SubCategory::class)->constrained()->cascadeOnDelete();
             $table->unsignedInteger('weight');
-
+            $table->timestamps();
         });
     }
 
