@@ -37,7 +37,10 @@ const roleBasedNav: Record<string, { main: NavItem[]; footer: NavItem[] }> = {
         footer: [],
     },
     hte: {
-        main: [{ title: 'Form', href: '/form', icon: ClipboardListIcon }],
+        main: [
+            { title: 'Form', href: '/form', icon: ClipboardListIcon },
+            { title: 'Profile', href: '/hte/profile', icon: UserIcon }
+        ],
         footer: [],
     },
     adviser: {
@@ -47,7 +50,7 @@ const roleBasedNav: Record<string, { main: NavItem[]; footer: NavItem[] }> = {
     student: {
         main: [
             { title: 'Assessment', href: '/assessment', icon: BookCheckIcon },
-            { title: 'Profile', href: '/student-    profile', icon: UserIcon },
+            { title: 'Profile', href: '/student-profile', icon: UserIcon },
         ],
         footer: [
             { title: 'About', href: '/about', icon: InfoIcon },
@@ -60,7 +63,15 @@ export function AppSidebar() {
     const { auth } = usePage<SharedData>().props;
 
     const role = auth.role ?? 'guest';
-    const nav = roleBasedNav[role] ?? roleBasedNav['guest'];
+    let nav = roleBasedNav[role] ?? roleBasedNav['guest'];
+
+    // For HTE users, show only Profile if they already have an HTE
+    if (role === 'hte' && auth.user.hte) {
+        nav = {
+            ...nav,
+            main: [{ title: 'Profile', href: '/hte/profile', icon: UserIcon }]
+        };
+    }
 
     return (
         <Sidebar collapsible="icon" variant="inset">

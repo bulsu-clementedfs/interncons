@@ -47,11 +47,11 @@ Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
 });
 
 Route::middleware(['auth', 'verified', 'role:hte'])->group(function () {
-    Route::get('form', function () {
-        return Inertia::render('hte/form');
-    })->name('form');
+    Route::get('form', [App\Http\Controllers\HTEController::class, 'showForm'])->name('form');
     Route::post('hte/submit', [App\Http\Controllers\HTEController::class, 'submit'])->name('hte.submit');
     Route::get('hte/categories', [App\Http\Controllers\HTEController::class, 'getCategoriesForCriteria'])->name('hte.categories');
+    Route::get('hte/profile', [App\Http\Controllers\HTEController::class, 'profile'])->name('hte.profile');
+    Route::get('hte/check-existing', [App\Http\Controllers\HTEController::class, 'checkExistingHTE'])->name('hte.check-existing');
 });
 
 Route::middleware(['auth', 'verified', 'role:adviser'])->group(function () {

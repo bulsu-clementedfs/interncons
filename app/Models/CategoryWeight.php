@@ -13,14 +13,14 @@ class CategoryWeight extends Model
     protected $table = 'category_weights';
 
     protected $fillable = [
-        'hte_id',
+        'internship_id',
         'category_id',
         'weight',
     ];
 
-    public function hte(): BelongsTo
+    public function internship(): BelongsTo
     {
-        return $this->belongsTo(HTE::class);
+        return $this->belongsTo(Internship::class);
     }
 
     public function category(): BelongsTo

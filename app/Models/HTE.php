@@ -12,7 +12,7 @@ class HTE extends Model
     /** @use HasFactory<\Database\Factories\HTEFactory> */
     use HasFactory;
 
-    protected $table = 'HTE';
+    protected $table = 'htes';
 
     protected $fillable = [
         'user_id',
@@ -44,22 +44,6 @@ class HTE extends Model
     public function internships(): HasMany
     {
         return $this->hasMany(Internship::class);
-    }
-
-    /**
-     * Get the category weights for the HTE.
-     */
-    public function categoryWeights(): HasMany
-    {
-        return $this->hasMany(CategoryWeight::class);
-    }
-
-    /**
-     * Get the subcategory weights for the HTE.
-     */
-    public function subcategoryWeights(): HasMany
-    {
-        return $this->hasMany(SubcategoryWeight::class);
     }
 
     /**

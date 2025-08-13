@@ -28,12 +28,6 @@ const FormSchema = z.object({
     startDate: z.string().min(1, 'Start date is required'),
     endDate: z.string().min(1, 'End date is required'),
     
-    // Criteria
-    minimumGPA: z.string().min(1, 'Minimum GPA is required'),
-    requiredSkills: z.string().min(1, 'Required skills are required'),
-    preferredMajors: z.string().optional(),
-    additionalRequirements: z.string().optional(),
-    
     // Weights
     categoryWeights: z.record(z.number().min(0).max(100)),
     subcategoryWeights: z.record(z.number().min(0).max(100)),
@@ -75,10 +69,6 @@ export default function HTEForm() {
             duration: '',
             startDate: '',
             endDate: '',
-            minimumGPA: '',
-            requiredSkills: '',
-            preferredMajors: '',
-            additionalRequirements: '',
             categoryWeights: {},
             subcategoryWeights: {},
         },

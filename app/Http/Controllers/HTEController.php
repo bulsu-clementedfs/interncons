@@ -10,14 +10,49 @@ use App\Models\CategoryWeight;
 use App\Models\SubcategoryWeight;
 use App\Models\Category;
 use App\Models\SubCategory;
+use Inertia\Inertia;
 
 class HTEController extends Controller
 {
+    /**
+     * Check if user already has an HTE
+     */
+    public function checkExistingHTE()
+    {
+        $user = Auth::user();
+        $existingHTE = $user->hte;
+        
+        return response()->json([
+            'hasExistingHTE' => $existingHTE !== null,
+            'hte' => $existingHTE
+        ]);
+    }
+
+    /**
+     * Show HTE form (only if user doesn't have an existing HTE)
+     */
+    public function showForm()
+    {
+        $user = Auth::user();
+        
+        if ($user->hte) {
+            return redirect()->route('hte.profile');
+        }
+
+        return Inertia::render('hte/form');
+    }
+
     /**
      * Handle HTE form submission
      */
     public function submit(Request $request): RedirectResponse
     {
+        // Check if user already has an HTE
+        $user = Auth::user();
+        if ($user->hte) {
+            return redirect()->back()->withErrors(['error' => 'You have already submitted an HTE form. You cannot submit multiple forms.']);
+        }
+
         // Validate the request
         $request->validate([
             'companyName' => 'required|string|max:100',
@@ -40,9 +75,6 @@ class HTEController extends Controller
         ]);
 
         try {
-            // Get the authenticated user
-            $user = Auth::user();
-            
             // Create HTE record
             $hte = HTE::create([
                 'user_id' => $user->id,
@@ -74,7 +106,7 @@ class HTEController extends Controller
                 ]);
             }
 
-            return redirect()->back()->with('success', 'HTE form submitted successfully!');
+            return redirect()->route('hte.profile')->with('success', 'HTE form submitted successfully!');
 
         } catch (\Exception $e) {
             return redirect()->back()->withErrors(['error' => 'An error occurred while submitting the form. Please try again.']);
@@ -91,5 +123,29 @@ class HTEController extends Controller
         }])->get();
 
         return response()->json($categories);
+    }
+
+    /**
+     * Show HTE profile page
+     */
+    public function profile()
+    {
+        $user = Auth::user();
+        $hte = $user->hte;
+        
+        if (!$hte) {
+            return redirect()->route('form');
+        }
+
+        // Get HTE with related data
+        $hteWithData = HTE::with([
+            'categoryWeights.category',
+            'subcategoryWeights.subcategory',
+            'internships'
+        ])->find($hte->id);
+
+        return Inertia::render('hte/profile', [
+            'hte' => $hteWithData
+        ]);
     }
 }

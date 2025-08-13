@@ -20,4 +20,9 @@ class Category extends Model
     {
         return $this->hasMany(SubCategory::class);
     }
+
+    public function categoryWeights(): HasMany
+    {
+        return $this->hasMany(CategoryWeight::class);
+    }
 }

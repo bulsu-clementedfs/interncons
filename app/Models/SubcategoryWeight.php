@@ -13,14 +13,14 @@ class SubcategoryWeight extends Model
     protected $table = 'subcategory_weights';
 
     protected $fillable = [
-        'hte_id',
+        'internship_id',
         'subcategory_id',
         'weight',
     ];
 
-    public function hte(): BelongsTo
+    public function internship(): BelongsTo
     {
-        return $this->belongsTo(HTE::class);
+        return $this->belongsTo(Internship::class);
     }
 
     public function subcategory(): BelongsTo
