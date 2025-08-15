@@ -18,7 +18,7 @@
 - The form should collect:
   - Basic Information: companyName, contactPerson, email, phone, address
   - Internship Details: position, department, numberOfInterns, duration, startDate, endDate
-  - Weights: categoryWeights, subcategoryWeights (optional)
+  - Weights: subcategoryWeights (optional)
 
 #### 4. Test Routes
 - Visit `/hte/test` to verify the route is accessible
@@ -74,8 +74,7 @@
        "duration": "3 months",
        "startDate": "2024-01-01",
        "endDate": "2024-04-01",
-       "categoryWeights": {},
-       "subcategoryWeights": {}
+               "subcategoryWeights": {}
      }'
    ```
 
@@ -91,7 +90,6 @@
 
 - `hte` - Should have new HTE record
 - `internships` - Should have new internship record
-- `category_weights` - Should have weight records (if weights were set)
 - `subcategory_weights` - Should have weight records (if weights were set)
 
 ### Next Steps:

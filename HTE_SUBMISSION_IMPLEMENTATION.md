@@ -26,13 +26,7 @@ Stores the internship opportunities offered by the HTE:
 - `slot_count` - Number of internship slots available
 - `is_active` - Whether the internship is active
 
-### 3. Category Weights Table (`category_weights`)
-Stores the weight assignments for each category:
-- `hte_id` - Foreign key to the HTE record
-- `category_id` - Foreign key to the category
-- `weight` - Weight percentage assigned to this category
-
-### 4. Subcategory Weights Table (`subcategory_weights`)
+### 3. Subcategory Weights Table (`subcategory_weights`)
 Stores the weight assignments for each subcategory:
 - `hte_id` - Foreign key to the HTE record
 - `subcategory_id` - Foreign key to the subcategory
@@ -58,7 +52,6 @@ The submission process follows these steps:
    - Active status
 
 4. **Weight Storage**: 
-   - Stores category weights in the `category_weights` table
    - Stores subcategory weights in the `subcategory_weights` table
    - Both are linked to the HTE record via foreign keys
 
@@ -73,7 +66,6 @@ The submission process follows these steps:
 
 ```
 HTE (1) -----> (Many) Internships
-HTE (1) -----> (Many) CategoryWeights
 HTE (1) -----> (Many) SubcategoryWeights
 ```
 

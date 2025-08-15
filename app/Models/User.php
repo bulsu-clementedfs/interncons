@@ -62,6 +62,6 @@ class User extends Authenticatable
 
     public function hte(): HasOne
     {
-        return $this->hasOne(HTE::class);
+        return $this->hasOne(HTE::class, 'user_id');
     }
 }

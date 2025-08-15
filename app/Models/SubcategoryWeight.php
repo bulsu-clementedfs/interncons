@@ -20,11 +20,11 @@ class SubcategoryWeight extends Model
 
     public function internship(): BelongsTo
     {
-        return $this->belongsTo(Internship::class);
+        return $this->belongsTo(Internship::class, 'internship_id', 'id');
     }
 
     public function subcategory(): BelongsTo
     {
-        return $this->belongsTo(SubCategory::class);
+        return $this->belongsTo(SubCategory::class, 'subcategory_id', 'id');
     }
 }

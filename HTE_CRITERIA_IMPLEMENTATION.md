@@ -5,20 +5,19 @@
 ### **Backend Features:**
 
 1. **Database Structure**
-   - Fixed `category_weights` table migration (references Category instead of SubCategory)
    - Fixed `subcategory_weights` table migration (references SubCategory correctly)
    - Added timestamps to both weight tables
-   - Updated `CategoryWeight` and `SubcategoryWeight` models with proper relationships
+   - Updated `SubcategoryWeight` model with proper relationships
 
 2. **HTE Controller**
    - Created `HTEController.php` with `submit()` method
    - Added `getCategoriesForCriteria()` method for API endpoint
    - Handles weight validation and storage
-   - Stores weights in respective tables: `category_weights` and `subcategory_weights`
+   - Stores weights in the `subcategory_weights` table
 
 3. **Model Relationships**
    - Updated `HTE` model with weight relationships
-   - Updated `CategoryWeight` and `SubcategoryWeight` models with proper fillable properties
+   - Updated `SubcategoryWeight` model with proper fillable properties
    - All models have proper relationships and constraints
 
 4. **API Endpoint**
@@ -62,7 +61,6 @@
 
 #### **Backend:**
 - `HTEController.php` - Handles form submission and weight storage
-- `CategoryWeight.php` - Model for category-level weights
 - `SubcategoryWeight.php` - Model for subcategory-level weights
 - Database migrations for weight tables
 - API endpoint for categories data
@@ -75,14 +73,7 @@
 
 ### **Database Tables:**
 
-1. **category_weights**
-   - `id` (primary key)
-   - `hte_id` (foreign key to HTE)
-   - `category_id` (foreign key to Category)
-   - `weight` (unsigned integer)
-   - `timestamps`
-
-2. **subcategory_weights**
+1. **subcategory_weights**
    - `id` (primary key)
    - `hte_id` (foreign key to HTE)
    - `subcategory_id` (foreign key to SubCategory)
@@ -91,11 +82,7 @@
 
 ### **Validation Rules:**
 
-1. **Category Weights**
-   - Must total exactly 100% across all categories
-   - Individual weights: 0-100%
-
-2. **Subcategory Weights**
+1. **Subcategory Weights**
    - Must total exactly 100% within each parent category
    - Individual weights: 0-100%
 

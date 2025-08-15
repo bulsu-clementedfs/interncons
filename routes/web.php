@@ -54,6 +54,8 @@ Route::middleware(['auth', 'verified', 'role:hte'])->group(function () {
     Route::get('hte/check-existing', [App\Http\Controllers\HTEController::class, 'checkExistingHTE'])->name('hte.check-existing');
 });
 
+
+
 Route::middleware(['auth', 'verified', 'role:adviser'])->group(function () {
     Route::get('application', [AdviserController::class, 'index'])->name('application');
     Route::post('application/approve', [AdviserController::class, 'approveStudents'])->name('application.approve');

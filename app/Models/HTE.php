@@ -35,7 +35,7 @@ class HTE extends Model
      */
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     /**
@@ -43,8 +43,10 @@ class HTE extends Model
      */
     public function internships(): HasMany
     {
-        return $this->hasMany(Internship::class);
+        return $this->hasMany(Internship::class, 'hte_id');
     }
+
+
 
     /**
      * Get the full name of the contact person.

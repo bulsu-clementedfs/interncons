@@ -6,7 +6,7 @@ import ReviewAndSubmit from '@/components/form/hte/review-and-submit';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Path, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { router, usePage } from '@inertiajs/react';
@@ -29,23 +29,43 @@ const FormSchema = z.object({
     endDate: z.string().min(1, 'End date is required'),
     
     // Weights
-    categoryWeights: z.record(z.number().min(0).max(100)),
-    subcategoryWeights: z.record(z.number().min(0).max(100)),
+    subcategoryWeights: z.record(z.string(), z.number().min(0).max(100)),
 });
 
 type FormData = z.infer<typeof FormSchema>;
+
+// Types for categories data
+interface Category {
+    id: number;
+    category_name: string;
+    subCategories: SubCategory[];
+}
+
+interface SubCategory {
+    id: number;
+    subcategory_name: string;
+    questions: Question[];
+}
+
+interface Question {
+    id: number;
+    question: string;
+    access: string;
+    is_active: boolean;
+}
 
 export default function HTEForm() {
     const { flash } = usePage<{ flash: { success?: string; error?: string } }>().props;
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-
-    // Check for success message on mount
-    useEffect(() => {
-        if (flash?.success) {
-            setIsSubmitted(true);
-        }
-    }, [flash?.success]);
+    
+    // Lift categories data and state to parent component
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
+    const [expandedSubcategories, setExpandedSubcategories] = useState<Set<number>>(new Set());
+    const [expandedQuestions, setExpandedQuestions] = useState<Set<number>>(new Set());
+    const [categoriesLoading, setCategoriesLoading] = useState(true);
+    const [dataFetched, setDataFetched] = useState(false);
 
     const steps = [
         { id: 'Step 1', name: 'Basic Information' },
@@ -69,24 +89,84 @@ export default function HTEForm() {
             duration: '',
             startDate: '',
             endDate: '',
-            categoryWeights: {},
             subcategoryWeights: {},
         },
     });
 
+    // Fetch categories data once when component mounts
+    const fetchCategories = useCallback(async () => {
+        if (dataFetched) return;
+        
+        try {
+            const response = await fetch('/hte/categories', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('Categories data received:', data);
+            
+            // Filter out categories without subcategories
+            const processedData = data.filter((category: any) => {
+                const hasSubCategories = category.subCategories && category.subCategories.length > 0;
+                return hasSubCategories;
+            });
+            
+            setCategories(processedData);
+            
+            // Initialize equal weights for all subcategories
+            processedData.forEach((category: Category) => {
+                if (category.subCategories && category.subCategories.length > 0) {
+                    const equalWeight = Math.round(100 / category.subCategories.length);
+                    const remainder = 100 % category.subCategories.length;
+                    
+                    category.subCategories.forEach((subcat: SubCategory, index: number) => {
+                        const weight = index < remainder ? equalWeight + 1 : equalWeight;
+                        form.setValue(`subcategoryWeights.${subcat.id}`, weight);
+                    });
+                }
+            });
+            
+            setDataFetched(true);
+            setCategoriesLoading(false);
+        } catch (error) {
+            console.error('Error fetching categories:', error);
+            setCategoriesLoading(false);
+        }
+    }, [dataFetched, form]);
+
+    useEffect(() => {
+        fetchCategories();
+    }, [fetchCategories]);
+
+    // Check for success message on mount
+    useEffect(() => {
+        if (flash?.success) {
+            setIsSubmitted(true);
+        }
+    }, [flash?.success]);
+
     function onSubmit(values: FormData) {
         setIsSubmitting(true);
         
-        // Convert weights to strings for form submission
+        // Keep weights as numbers for form submission
         const formData = {
             ...values,
-            categoryWeights: Object.fromEntries(
-                Object.entries(values.categoryWeights).map(([key, value]) => [key, String(value)])
-            ),
-            subcategoryWeights: Object.fromEntries(
-                Object.entries(values.subcategoryWeights).map(([key, value]) => [key, String(value)])
-            ),
         };
+        
+        // Debug: Log the form data being sent
+        console.log('HTE Form Submission - Form Data:', formData);
+        console.log('Subcategory Weights:', formData.subcategoryWeights);
+        console.log('Subcategory Weights Count:', Object.keys(formData.subcategoryWeights).length);
         
         router.post('/hte/submit', formData, {
             onSuccess: () => {
@@ -118,7 +198,7 @@ export default function HTEForm() {
                 fieldsToValidate = ['position', 'department', 'numberOfInterns', 'duration', 'startDate', 'endDate'];
                 break;
             case 2: // Criteria
-                fieldsToValidate = ['minimumGPA', 'requiredSkills'];
+                fieldsToValidate = ['subcategoryWeights'];
                 break;
         }
 
@@ -172,8 +252,19 @@ export default function HTEForm() {
                             <form onSubmit={form.handleSubmit(onSubmit)}>
                                 {currentStep === 0 && <BasicInformation />}
                                 {currentStep === 1 && <InternshipOffered />}
-                                {currentStep === 2 && <Criteria />}
-                                {currentStep === 3 && <ReviewAndSubmit isSubmitting={isSubmitting} />}
+                                {currentStep === 2 && (
+                                    <Criteria 
+                                        categories={categories}
+                                        loading={categoriesLoading}
+                                        expandedCategories={expandedCategories}
+                                        expandedSubcategories={expandedSubcategories}
+                                        expandedQuestions={expandedQuestions}
+                                        setExpandedCategories={setExpandedCategories}
+                                        setExpandedSubcategories={setExpandedSubcategories}
+                                        setExpandedQuestions={setExpandedQuestions}
+                                    />
+                                )}
+                                {currentStep === 3 && <ReviewAndSubmit isSubmitting={isSubmitting} categories={categories} />}
                             </form>
                         </Form>
                     </div>

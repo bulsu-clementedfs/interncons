@@ -30,16 +30,10 @@ class Internship extends Model
      */
     public function hte(): BelongsTo
     {
-        return $this->belongsTo(HTE::class, 'hte_id');
+        return $this->belongsTo(HTE::class, 'hte_id', 'id');
     }
 
-    /**
-     * Get the category weights for this internship.
-     */
-    public function categoryWeights(): HasMany
-    {
-        return $this->hasMany(CategoryWeight::class);
-    }
+
 
     /**
      * Get the subcategory weights for this internship.
