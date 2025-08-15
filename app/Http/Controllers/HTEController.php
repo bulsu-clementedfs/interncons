@@ -26,22 +26,23 @@ class HTEController extends Controller
         
         return response()->json([
             'hasExistingHTE' => $existingHTE !== null,
+            'hasSubmitted' => $existingHTE ? $existingHTE->is_submit : false,
             'hte' => $existingHTE
         ]);
     }
 
     /**
-     * Show HTE form (only if user doesn't have an existing HTE)
+     * Show HTE form (always accessible, but content changes based on submission status)
      */
     public function showForm()
     {
         $user = Auth::user();
+        $hte = $user->hte;
         
-        if ($user->hte) {
-            return redirect()->route('hte.profile');
-        }
-
-        return Inertia::render('hte/form');
+        return Inertia::render('hte/form', [
+            'hte' => $hte,
+            'hasSubmitted' => $hte ? $hte->is_submit : false
+        ]);
     }
 
     /**
@@ -49,9 +50,9 @@ class HTEController extends Controller
      */
     public function submit(Request $request): RedirectResponse
     {
-        // Check if user already has an HTE
+        // Check if user already has an HTE and has submitted
         $user = Auth::user();
-        if ($user->hte) {
+        if ($user->hte && $user->hte->is_submit) {
             return redirect()->back()->withErrors(['error' => 'You have already submitted an HTE form. You cannot submit multiple forms.']);
         }
 
@@ -79,18 +80,36 @@ class HTEController extends Controller
         ]);
 
         try {
-            // Create HTE record
-            $hte = HTE::create([
-                'user_id' => $user->id,
-                'company_name' => $request->companyName,
-                'company_address' => $request->address,
-                'company_email' => $request->email,
-                'cperson_fname' => $request->contactPerson,
-                'cperson_lname' => '',
-                'cperson_position' => $request->position,
-                'cperson_contactnum' => $request->phone,
-                'is_active' => true,
-            ]);
+            // Check if HTE record exists but hasn't been submitted
+            if ($user->hte && !$user->hte->is_submit) {
+                // Update existing HTE record
+                $hte = $user->hte;
+                $hte->update([
+                    'company_name' => $request->companyName,
+                    'company_address' => $request->address,
+                    'company_email' => $request->email,
+                    'cperson_fname' => $request->contactPerson,
+                    'cperson_lname' => '',
+                    'cperson_position' => $request->position,
+                    'cperson_contactnum' => $request->phone,
+                    'is_active' => true,
+                    'is_submit' => true,
+                ]);
+            } else {
+                // Create new HTE record
+                $hte = HTE::create([
+                    'user_id' => $user->id,
+                    'company_name' => $request->companyName,
+                    'company_address' => $request->address,
+                    'company_email' => $request->email,
+                    'cperson_fname' => $request->contactPerson,
+                    'cperson_lname' => '',
+                    'cperson_position' => $request->position,
+                    'cperson_contactnum' => $request->phone,
+                    'is_active' => true,
+                    'is_submit' => true,
+                ]);
+            }
 
             Log::info('HTE Record Created:', ['hte_id' => $hte->id]);
 
@@ -218,6 +237,15 @@ class HTEController extends Controller
             return redirect()->route('form');
         }
 
+        // If HTE hasn't submitted yet, show message to complete form first
+        if (!$hte->is_submit) {
+            return Inertia::render('hte/profile', [
+                'hte' => null,
+                'hasSubmitted' => false,
+                'message' => 'No information yet, please answer the form first.'
+            ]);
+        }
+
         // Get HTE with related data
         $hteWithData = HTE::with([
             'internships.subcategoryWeights.subcategory'
@@ -233,7 +261,8 @@ class HTEController extends Controller
         ]);
 
         return Inertia::render('hte/profile', [
-            'hte' => $hteWithData
+            'hte' => $hteWithData,
+            'hasSubmitted' => true
         ]);
     }
 }

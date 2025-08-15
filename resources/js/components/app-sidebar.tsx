@@ -65,13 +65,8 @@ export function AppSidebar() {
     const role = auth.role ?? 'guest';
     let nav = roleBasedNav[role] ?? roleBasedNav['guest'];
 
-    // For HTE users, show only Profile if they already have an HTE
-    if (role === 'hte' && auth.user.hte) {
-        nav = {
-            ...nav,
-            main: [{ title: 'Profile', href: '/hte/profile', icon: UserIcon }]
-        };
-    }
+    // For HTE users, always show both Form and Profile links
+    // The behavior will be handled in the individual pages based on submission status
 
     return (
         <Sidebar collapsible="icon" variant="inset">
