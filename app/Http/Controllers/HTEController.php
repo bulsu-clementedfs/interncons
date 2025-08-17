@@ -137,7 +137,7 @@ class HTEController extends Controller
                 'weights_successfully_created' => $weightsCreated
             ]);
 
-            return redirect()->route('hte.profile')->with('success', 'HTE form submitted successfully!');
+            return redirect()->route('hte.dashboard')->with('success', 'HTE form submitted successfully!');
 
         } catch (\Exception $e) {
             Log::error('HTE Form Submission Error:', [
@@ -218,9 +218,9 @@ class HTEController extends Controller
             return redirect()->route('form');
         }
 
-        // Get HTE with related data
+        // Get HTE with related data including categories
         $hteWithData = HTE::with([
-            'internships.subcategoryWeights.subcategory'
+            'internships.subcategoryWeights.subcategory.category'
         ])->find($hte->id);
 
         // Debug: Log the data being sent to the frontend
@@ -235,5 +235,166 @@ class HTEController extends Controller
         return Inertia::render('hte/profile', [
             'hte' => $hteWithData
         ]);
+    }
+
+    /**
+     * Show HTE dashboard page
+     */
+    public function dashboard()
+    {
+        $user = Auth::user();
+        $hte = $user->hte;
+        
+        if (!$hte) {
+            return redirect()->route('form');
+        }
+
+        // Get comprehensive dashboard data
+        $dashboardData = HTE::with([
+            'internships' => function($query) {
+                $query->with(['subcategoryWeights.subcategory']);
+            },
+            'user'
+        ])->find($hte->id);
+
+        // Get statistics
+        $totalInternships = $dashboardData->internships->count();
+        $activeInternships = $dashboardData->internships->where('is_active', true)->count();
+        $totalSlots = $dashboardData->internships->sum('slot_count');
+        
+        // Get internship slots breakdown for detailed view
+        $internshipSlots = $dashboardData->internships->map(function($internship) {
+            return [
+                'id' => $internship->id,
+                'position_title' => $internship->position_title,
+                'slot_count' => $internship->slot_count,
+                'is_active' => $internship->is_active,
+                'created_at' => $internship->created_at
+            ];
+        });
+
+        return Inertia::render('hte/dashboard', [
+            'hte' => $dashboardData,
+            'stats' => [
+                'totalInternships' => $totalInternships,
+                'activeInternships' => $activeInternships,
+                'totalSlots' => $totalSlots,
+                'internshipSlots' => $internshipSlots,
+                'companyName' => $dashboardData->company_name,
+                'contactPerson' => $dashboardData->cperson_fname . ' ' . $dashboardData->cperson_lname,
+                'email' => $dashboardData->company_email,
+                'phone' => $dashboardData->cperson_contactnum,
+                'address' => $dashboardData->company_address,
+            ],
+        ]);
+    }
+
+    /**
+     * Show Add Internship form (only if HTE has already submitted their form)
+     */
+    public function showAddInternship()
+    {
+        $user = Auth::user();
+        $hte = $user->hte;
+        
+        if (!$hte) {
+            return redirect()->route('form');
+        }
+
+        // Get categories for criteria selection
+        $categories = Category::with(['subCategories.questions' => function($query) {
+            $query->where('is_active', true);
+        }])
+        ->where('category_name', '!=', 'Basic Information')
+        ->get();
+
+        // Transform the data to ensure proper structure for frontend
+        $transformedCategories = $categories->map(function($category) {
+            return [
+                'id' => $category->id,
+                'category_name' => $category->category_name,
+                'created_at' => $category->created_at,
+                'updated_at' => $category->updated_at,
+                'subCategories' => $category->subCategories->map(function($subCategory) {
+                    return [
+                        'id' => $subCategory->id,
+                        'subcategory_name' => $subCategory->subcategory_name,
+                        'category_id' => $subCategory->category_id,
+                        'created_at' => $subCategory->created_at,
+                        'updated_at' => $subCategory->updated_at,
+                        'questions' => $subCategory->questions->map(function($question) {
+                            return [
+                                'id' => $question->id,
+                                'question' => $question->question,
+                                'access' => $question->access,
+                                'is_active' => (bool) $question->is_active,
+                                'subcategory_id' => $question->subcategory_id,
+                                'created_at' => $question->created_at,
+                                'updated_at' => $question->updated_at,
+                            ];
+                        })->toArray()
+                    ];
+                })->toArray()
+            ];
+        });
+
+        return Inertia::render('hte/add-internship', [
+            'hte' => $hte,
+            'categories' => $transformedCategories
+        ]);
+    }
+
+    /**
+     * Store new internship
+     */
+    public function storeInternship(Request $request): RedirectResponse
+    {
+        $user = Auth::user();
+        $hte = $user->hte;
+        
+        if (!$hte) {
+            return redirect()->back()->withErrors(['error' => 'You must submit an HTE form first.']);
+        }
+
+        // Validate the request
+        $request->validate([
+            'position' => 'required|string|max:100',
+            'department' => 'required|string|max:100',
+            'numberOfInterns' => 'required|string|max:50',
+            'duration' => 'required|string|max:100',
+            'startDate' => 'required|string|max:50',
+            'endDate' => 'required|string|max:50',
+            'subcategoryWeights' => 'required|array',
+        ]);
+
+        try {
+            // Create Internship record
+            $internship = Internship::create([
+                'hte_id' => $hte->id,
+                'position_title' => $request->position,
+                'department' => $request->department,
+                'placement_description' => 'Internship opportunity at ' . $hte->company_name . ' - Duration: ' . $request->duration . ' from ' . $request->startDate . ' to ' . $request->endDate,
+                'slot_count' => (int) $request->numberOfInterns,
+                'is_active' => true,
+            ]);
+
+            // Store subcategory weights
+            foreach ($request->subcategoryWeights as $subcategoryId => $weight) {
+                SubcategoryWeight::create([
+                    'internship_id' => $internship->id,
+                    'subcategory_id' => $subcategoryId,
+                    'weight' => (int) $weight,
+                ]);
+            }
+
+            return redirect()->route('hte.dashboard')->with('success', 'Internship added successfully!');
+
+        } catch (\Exception $e) {
+            Log::error('Internship Creation Error:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return redirect()->back()->withErrors(['error' => 'An error occurred while creating the internship. Please try again.']);
+        }
     }
 }

@@ -210,11 +210,11 @@ class SubcategoryWeightSeeder extends Seeder
             SubcategoryWeight::firstOrCreate(
                 [
                     'internship_id' => $data['internship_id'],
-                    'sub_category_id' => $data['subcategory_id'],
+                    'subcategory_id' => $data['subcategory_id'],
                 ],
                 [
                     'internship_id' => $data['internship_id'],
-                    'sub_category_id' => $data['subcategory_id'],
+                    'subcategory_id' => $data['subcategory_id'],
                     'weight' => $data['weight'],
                 ]
             );
@@ -229,14 +229,14 @@ class SubcategoryWeightSeeder extends Seeder
                 foreach ($category->subCategory as $subcategory) {
                     // Check if this subcategory weight already exists
                     $existingWeight = SubcategoryWeight::where('internship_id', $internship->id)
-                        ->where('sub_category_id', $subcategory->id)
+                        ->where('subcategory_id', $subcategory->id)
                         ->first();
                     
                     if (!$existingWeight) {
                         // Create weight of 0 for unset subcategories
                         SubcategoryWeight::create([
                             'internship_id' => $internship->id,
-                            'sub_category_id' => $subcategory->id,
+                            'subcategory_id' => $subcategory->id,
                             'weight' => 0,
                         ]);
                     }

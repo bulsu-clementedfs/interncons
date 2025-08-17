@@ -13,7 +13,8 @@ import {
     InfoIcon,
     PersonStandingIcon,
     PrinterIcon,
-    UserIcon
+    UserIcon,
+    PlusIcon
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -38,6 +39,7 @@ const roleBasedNav: Record<string, { main: NavItem[]; footer: NavItem[] }> = {
     },
     hte: {
         main: [
+            { title: 'Dashboard', href: '/hte/dashboard', icon: ClipboardIcon },
             { title: 'Form', href: '/form', icon: ClipboardListIcon },
             { title: 'Profile', href: '/hte/profile', icon: UserIcon }
         ],
@@ -65,11 +67,15 @@ export function AppSidebar() {
     const role = auth.role ?? 'guest';
     let nav = roleBasedNav[role] ?? roleBasedNav['guest'];
 
-    // For HTE users, show only Profile if they already have an HTE
+    // For HTE users, show Dashboard and Profile if they already have an HTE
     if (role === 'hte' && auth.user.hte) {
         nav = {
             ...nav,
-            main: [{ title: 'Profile', href: '/hte/profile', icon: UserIcon }]
+            main: [
+                { title: 'Dashboard', href: '/hte/dashboard', icon: ClipboardIcon },
+                { title: 'Add Internship', href: '/hte/add-internship', icon: PlusIcon },
+                { title: 'Profile', href: '/hte/profile', icon: UserIcon }
+            ]
         };
     }
 

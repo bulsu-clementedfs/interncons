@@ -232,6 +232,14 @@ export default function HTEForm() {
                                 <p className="text-gray-600 dark:text-gray-400">
                                     Thank you for submitting your HTE form. Your internship opportunity has been recorded and will be available for student matching.
                                 </p>
+                                <div className="pt-4">
+                                    <Button 
+                                        onClick={() => router.visit('/hte/dashboard')}
+                                        className="bg-blue-600 hover:bg-blue-700"
+                                    >
+                                        Go to Dashboard
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     </div>
