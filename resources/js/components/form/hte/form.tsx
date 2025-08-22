@@ -27,6 +27,7 @@ const FormSchema = z.object({
     duration: z.string().min(1, 'Duration is required'),
     startDate: z.string().min(1, 'Start date is required'),
     endDate: z.string().min(1, 'End date is required'),
+
     
     // Weights
     subcategoryWeights: z.record(z.string(), z.number().min(0).max(100)),
@@ -89,6 +90,7 @@ export default function HTEForm() {
             duration: '',
             startDate: '',
             endDate: '',
+
             subcategoryWeights: {},
         },
     });

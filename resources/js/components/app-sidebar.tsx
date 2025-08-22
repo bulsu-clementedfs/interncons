@@ -14,7 +14,8 @@ import {
     PersonStandingIcon,
     PrinterIcon,
     UserIcon,
-    PlusIcon
+    PlusIcon,
+    TargetIcon
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -23,7 +24,7 @@ const roleBasedNav: Record<string, { main: NavItem[]; footer: NavItem[] }> = {
         main: [
             {
                 title: 'Student',
-                href: '',
+                href: '/student',
                 icon: ClipboardIcon,
                 subNav: [
                     { title: 'List', href: '/student/list' },
@@ -32,7 +33,6 @@ const roleBasedNav: Record<string, { main: NavItem[]; footer: NavItem[] }> = {
                 ],
             },
             { title: 'HTE', href: '/hte', icon: UserIcon },
-            { title: 'Placement', href: '/placement', icon: BriefcaseBusinessIcon },
             { title: 'Reports', href: '/report', icon: PrinterIcon },
         ],
         footer: [],
@@ -46,18 +46,28 @@ const roleBasedNav: Record<string, { main: NavItem[]; footer: NavItem[] }> = {
         footer: [],
     },
     adviser: {
-        main: [{ title: 'Application', href: '/application', icon: PersonStandingIcon }],
+        main: [
+            { title: 'Dashboard', href: '/adviser/dashboard', icon: ClipboardIcon },
+            { title: 'Students', href: '/students', icon: UserIcon },
+            { title: 'Application', href: '/application', icon: PersonStandingIcon }
+        ],
         footer: [],
     },
     student: {
         main: [
+            { title: 'Dashboard', href: '/dashboard', icon: ClipboardIcon },
             { title: 'Assessment', href: '/assessment', icon: BookCheckIcon },
+            { title: 'SIP Match', href: '/student/matches', icon: TargetIcon },
             { title: 'Profile', href: '/student-profile', icon: UserIcon },
         ],
         footer: [
             { title: 'About', href: '/about', icon: InfoIcon },
             { title: 'Contact', href: '/contact', icon: HeadsetIcon },
         ],
+    },
+    guest: {
+        main: [],
+        footer: [],
     },
 };
 
@@ -98,7 +108,7 @@ export function AppSidebar() {
             </SidebarContent>
 
             <SidebarFooter>
-                <NavFooter items={nav.footer} className="mt-auto" />
+                <NavFooter items={nav.footer || []} className="mt-auto" />
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

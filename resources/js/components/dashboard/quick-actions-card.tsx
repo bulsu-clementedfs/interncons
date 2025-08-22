@@ -44,7 +44,7 @@ export function QuickActionsCard({ actions = defaultActions }: QuickActionsCardP
             <CardContent>
                 <div className="grid gap-4 md:grid-cols-3">
                     {actions.map((action, index) => {
-                        const Icon = action.icon;
+                        const IconComponent = action.icon;
                         return (
                             <button 
                                 key={index}
@@ -52,7 +52,7 @@ export function QuickActionsCard({ actions = defaultActions }: QuickActionsCardP
                                 onClick={action.onClick}
                             >
                                 <div className="flex items-center gap-3">
-                                    <Icon className={`h-5 w-5 ${action.iconColor}`} />
+                                    <IconComponent className={`h-5 w-5 ${action.iconColor}`} />
                                     <div>
                                         <p className="font-medium">{action.title}</p>
                                         <p className="text-sm text-muted-foreground">{action.description}</p>

@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { BriefcaseIcon, UsersIcon, CalendarIcon, MapPinIcon } from 'lucide-react';
+import { BriefcaseIcon, UsersIcon, CalendarIcon, MapPinIcon, ExternalLinkIcon } from 'lucide-react';
+import { Link } from '@inertiajs/react';
 
 interface Internship {
     id: number;
@@ -40,35 +41,48 @@ export function InternshipsListCard({ internships }: InternshipsListCardProps) {
                 {internships.length > 0 ? (
                     <div className="space-y-3">
                         {sortedInternships.map((internship) => (
-                            <div key={internship.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
-                                <div className="flex-1 space-y-2">
-                                    <div className="flex items-center gap-3">
-                                        <h4 className="font-semibold text-gray-900">{internship.position_title}</h4>
-                                        <Badge variant={internship.is_active ? "default" : "secondary"}>
-                                            {internship.is_active ? "Active" : "Inactive"}
-                                        </Badge>
+                            <Link 
+                                key={internship.id} 
+                                href={`/hte/internship/${internship.id}`}
+                                className="block"
+                            >
+                                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group">
+                                    <div className="flex-1 space-y-2">
+                                        <div className="flex items-center gap-3">
+                                            <h4 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                                                {internship.position_title}
+                                            </h4>
+                                            <Badge variant={internship.is_active ? "default" : "secondary"}>
+                                                {internship.is_active ? "Active" : "Inactive"}
+                                            </Badge>
+                                        </div>
+                                        <div className="flex items-center gap-4 text-sm text-gray-600">
+                                            <div className="flex items-center gap-1">
+                                                <MapPinIcon className="h-3 w-3" />
+                                                <span>{internship.department}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <UsersIcon className="h-3 w-3" />
+                                                <span>{internship.slot_count} slot{internship.slot_count !== 1 ? 's' : ''}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <CalendarIcon className="h-3 w-3" />
+                                                <span>{new Date(internship.created_at).toLocaleDateString()}</span>
+                                            </div>
+                                        </div>
+                                        {internship.placement_description && (
+                                            <p className="text-sm text-gray-500 line-clamp-2">
+                                                {internship.placement_description}
+                                            </p>
+                                        )}
                                     </div>
-                                    <div className="flex items-center gap-4 text-sm text-gray-600">
-                                        <div className="flex items-center gap-1">
-                                            <MapPinIcon className="h-3 w-3" />
-                                            <span>{internship.department}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <UsersIcon className="h-3 w-3" />
-                                            <span>{internship.slot_count} slot{internship.slot_count !== 1 ? 's' : ''}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <CalendarIcon className="h-3 w-3" />
-                                            <span>{new Date(internship.created_at).toLocaleDateString()}</span>
-                                        </div>
+                                    
+                                    <div className="flex items-center gap-2 text-gray-400 group-hover:text-blue-600 transition-colors">
+                                        <span className="text-sm font-medium">View Details</span>
+                                        <ExternalLinkIcon className="h-4 w-4" />
                                     </div>
-                                    {internship.placement_description && (
-                                        <p className="text-sm text-gray-500 line-clamp-2">
-                                            {internship.placement_description}
-                                        </p>
-                                    )}
                                 </div>
-                            </div>
+                            </Link>
                         ))}
                         
                         {/* Summary section */}

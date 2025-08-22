@@ -44,6 +44,14 @@ class Internship extends Model
     }
 
     /**
+     * Get the placements for this internship.
+     */
+    public function placements(): HasMany
+    {
+        return $this->hasMany(Placement::class);
+    }
+
+    /**
      * Scope a query to only include active internships.
      */
     public function scopeActive($query)

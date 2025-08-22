@@ -26,6 +26,7 @@ return new class extends Migration
             $table->date('birth_date');
             $table->boolean('is_active')->default(true);
             $table->boolean('is_submit')->default(false);
+            $table->boolean('is_placed')->default(false);
             $table->timestamps();
         });
     }

@@ -10,6 +10,8 @@ use App\Models\Category;
 use App\Models\SubCategory;
 use App\Models\Question; // Added this import
 use App\Models\StudentScore;
+use App\Models\Internship; // Added this import
+use App\Services\MatchingService;
 
 class AssessmentController extends Controller
 {
@@ -292,7 +294,7 @@ class AssessmentController extends Controller
             }
 
             // Get all categories with their subcategories and scores
-            $categories = Category::with(['subCategory' => function ($query) use ($student) {
+            $categories = Category::with(['subCategories' => function ($query) use ($student) {
                 $query->with(['studentScores' => function ($scoreQuery) use ($student) {
                     $scoreQuery->where('student_id', $student->id);
                 }]);
@@ -322,7 +324,7 @@ class AssessmentController extends Controller
                     'subcategories' => []
                 ];
 
-                foreach ($category->subCategory as $subcategory) {
+                foreach ($category->subCategories as $subcategory) {
                     $score = $subcategory->studentScores->first();
                     $categoryData['subcategories'][] = [
                         'id' => $subcategory->id,
@@ -338,6 +340,120 @@ class AssessmentController extends Controller
             
         } catch (\Exception $e) {
             return response()->json(['error' => 'Failed to retrieve student profile data'], 500);
+        }
+    }
+
+    /**
+     * Get student dashboard data
+     */
+    public function dashboard()
+    {
+        try {
+            $user = Auth::user();
+            $student = Student::where('user_id', $user->id)->first();
+            
+            if (!$student) {
+                return response()->json(['error' => 'Student not found'], 404);
+            }
+
+            // Get student's assessment submission status
+            $hasSubmitted = $student->is_submit;
+
+            // Get student's scores by category
+            $categories = Category::with(['subCategories' => function ($query) use ($student) {
+                $query->with(['studentScores' => function ($scoreQuery) use ($student) {
+                    $scoreQuery->where('student_id', $student->id);
+                }]);
+            }])->get();
+
+            // Calculate overall performance metrics
+            $totalScore = 0;
+            $totalQuestions = 0;
+            $categoryScores = [];
+
+            foreach ($categories as $category) {
+                $categoryScore = 0;
+                $categoryQuestions = 0;
+                
+                foreach ($category->subCategories as $subcategory) {
+                    $score = $subcategory->studentScores->first();
+                    if ($score) {
+                        $categoryScore += $score->score;
+                        $categoryQuestions++;
+                        $totalScore += $score->score;
+                        $totalQuestions++;
+                    }
+                }
+                
+                if ($categoryQuestions > 0) {
+                    $categoryScores[] = [
+                        'name' => $category->category_name,
+                        'average_score' => round($categoryScore / $categoryQuestions, 2),
+                        'questions_count' => $categoryQuestions
+                    ];
+                }
+            }
+
+            $overallAverage = $totalQuestions > 0 ? round($totalScore / $totalQuestions, 2) : 0;
+
+            // Get possible internships with compatibility scores (if student has submitted assessment)
+            $possibleInternships = collect();
+            if ($hasSubmitted) {
+                $matchingService = new MatchingService();
+                $possibleInternships = $matchingService->getTopCompatibleInternships($student);
+            }
+
+            // Get student's match status (if any)
+            $studentMatch = null;
+            if ($hasSubmitted) {
+                $studentMatch = \App\Models\StudentMatch::where('student_id', $student->id)
+                    ->with(['internship.hte:id,company_name'])
+                    ->first();
+            }
+
+            $dashboardData = [
+                'student' => [
+                    'id' => $student->id,
+                    'student_number' => $student->student_number,
+                    'first_name' => $student->first_name,
+                    'last_name' => $student->last_name,
+                    'middle_name' => $student->middle_name,
+                    'section' => $student->section,
+                    'specialization' => $student->specialization,
+                    'has_submitted_assessment' => $hasSubmitted,
+                ],
+                'performance' => [
+                    'overall_average' => $overallAverage,
+                    'total_questions' => $totalQuestions,
+                    'category_scores' => $categoryScores,
+                ],
+                'possible_internships' => $possibleInternships->map(function ($item) {
+                    $internship = $item['internship'];
+                    return [
+                        'id' => $internship->id,
+                        'position_title' => $internship->position_title,
+                        'company_name' => $internship->hte->company_name,
+                        'department' => $internship->department,
+                        'slot_count' => $internship->slot_count,
+                        'is_active' => $internship->is_active,
+                        'compatibility_score' => $item['compatibility_score'],
+                    ];
+                }),
+                'current_match' => $studentMatch ? [
+                    'id' => $studentMatch->id,
+                    'internship' => [
+                        'position_title' => $studentMatch->internship->position_title,
+                        'company_name' => $studentMatch->internship->hte->company_name,
+                    ],
+                    'match_score' => $studentMatch->compatibility_score ?? 0,
+                    'status' => $studentMatch->status ?? 'pending',
+                ] : null,
+            ];
+
+            return response()->json($dashboardData);
+            
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to retrieve dashboard data'], 500);
         }
     }
 }

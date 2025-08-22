@@ -245,7 +245,7 @@ export default function Profile({ student, categories, hasSubmitted = true }: Pr
                         <CardTitle>{title} Overview</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <RadarChart data={chartData} title={`${title} Radar Chart`} />
+                        <RadarChart data={chartData} title={`${title} Radar Chart`} maxValue={5} />
                     </CardContent>
                 </Card>
 

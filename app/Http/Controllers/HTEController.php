@@ -68,6 +68,7 @@ class HTEController extends Controller
             'duration' => 'required|string|max:100',
             'startDate' => 'required|string|max:50',
             'endDate' => 'required|string|max:50',
+
             'subcategoryWeights' => 'required|array',
         ]);
 
@@ -359,7 +360,7 @@ class HTEController extends Controller
         // Validate the request
         $request->validate([
             'position' => 'required|string|max:100',
-            'department' => 'required|string|max:100',
+            'department' => 'required|string|max:50',
             'numberOfInterns' => 'required|string|max:50',
             'duration' => 'required|string|max:100',
             'startDate' => 'required|string|max:50',
@@ -395,6 +396,281 @@ class HTEController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
             return redirect()->back()->withErrors(['error' => 'An error occurred while creating the internship. Please try again.']);
+        }
+    }
+
+    /**
+     * Show Internship details
+     */
+    public function showInternship($id)
+    {
+        $user = Auth::user();
+        $hte = $user->hte;
+        
+        if (!$hte) {
+            return redirect()->route('form');
+        }
+
+        // Get the internship with its weights and related data
+        $internship = Internship::with(['subcategoryWeights.subcategory.category'])
+            ->where('id', $id)
+            ->where('hte_id', $hte->id)
+            ->first();
+
+        if (!$internship) {
+            return redirect()->route('hte.dashboard')->withErrors(['error' => 'Internship not found.']);
+        }
+
+        // Transform the data for display
+        $internshipData = [
+            'id' => $internship->id,
+            'position_title' => $internship->position_title,
+            'department' => $internship->department,
+            'slot_count' => $internship->slot_count,
+            'placement_description' => $internship->placement_description,
+            'is_active' => $internship->is_active,
+            'created_at' => $internship->created_at,
+            'updated_at' => $internship->updated_at,
+            'subcategory_weights' => $internship->subcategoryWeights->map(function($weight) {
+                return [
+                    'id' => $weight->id,
+                    'weight' => $weight->weight,
+                    'subcategory' => [
+                        'id' => $weight->subcategory->id,
+                        'subcategory_name' => $weight->subcategory->subcategory_name,
+                        'category' => [
+                            'id' => $weight->subcategory->category->id,
+                            'category_name' => $weight->subcategory->category->category_name,
+                        ]
+                    ]
+                ];
+            })->toArray()
+        ];
+
+        return Inertia::render('hte/internship-profile', [
+            'hte' => $hte,
+            'internship' => $internshipData
+        ]);
+    }
+
+    /**
+     * Show Edit Internship form
+     */
+    public function showEditInternship($id)
+    {
+        $user = Auth::user();
+        $hte = $user->hte;
+        
+        if (!$hte) {
+            return redirect()->route('form');
+        }
+
+        // Get the internship with its weights
+        $internship = Internship::with(['subcategoryWeights.subcategory.category'])
+            ->where('id', $id)
+            ->where('hte_id', $hte->id)
+            ->first();
+
+        if (!$internship) {
+            return redirect()->route('hte.profile')->withErrors(['error' => 'Internship not found.']);
+        }
+
+        // Get categories for criteria selection
+        $categories = Category::with(['subCategories.questions' => function($query) {
+            $query->where('is_active', true);
+        }])
+        ->where('category_name', '!=', 'Basic Information')
+        ->get();
+
+        // Transform the data to ensure proper structure for frontend
+        $transformedCategories = $categories->map(function($category) {
+            return [
+                'id' => $category->id,
+                'category_name' => $category->category_name,
+                'created_at' => $category->created_at,
+                'updated_at' => $category->updated_at,
+                'subCategories' => $category->subCategories->map(function($subCategory) {
+                    return [
+                        'id' => $subCategory->id,
+                        'subcategory_name' => $subCategory->subcategory_name,
+                        'category_id' => $subCategory->category_id,
+                        'created_at' => $subCategory->created_at,
+                        'updated_at' => $subCategory->updated_at,
+                        'questions' => $subCategory->questions->map(function($question) {
+                            return [
+                                'id' => $question->id,
+                                'question' => $question->question,
+                                'access' => $question->access,
+                                'is_active' => (bool) $question->is_active,
+                                'subcategory_id' => $question->subcategory_id,
+                                'created_at' => $question->created_at,
+                                'updated_at' => $question->updated_at,
+                            ];
+                        })->toArray()
+                    ];
+                })->toArray()
+            ];
+        });
+
+        // Extract internship data for editing
+        $internshipData = [
+            'id' => $internship->id,
+            'position' => $internship->position_title,
+            'department' => $internship->department,
+            'numberOfInterns' => (string) $internship->slot_count,
+            'duration' => $this->extractDurationFromDescription($internship->placement_description),
+            'startDate' => $this->extractStartDateFromDescription($internship->placement_description),
+            'endDate' => $this->extractEndDateFromDescription($internship->placement_description),
+            'is_active' => $internship->is_active,
+        ];
+
+        // Extract existing weights
+        $existingWeights = [];
+        foreach ($internship->subcategoryWeights as $weight) {
+            $existingWeights[$weight->subcategory_id] = $weight->weight;
+        }
+
+        return Inertia::render('hte/edit-internship', [
+            'hte' => $hte,
+            'categories' => $transformedCategories,
+            'internship' => $internshipData,
+            'existingWeights' => $existingWeights
+        ]);
+    }
+
+    /**
+     * Update existing internship
+     */
+    public function updateInternship(Request $request, $id): RedirectResponse
+    {
+        $user = Auth::user();
+        $hte = $user->hte;
+        
+        if (!$hte) {
+            return redirect()->back()->withErrors(['error' => 'You must submit an HTE form first.']);
+        }
+
+        // Validate the request
+        $request->validate([
+            'position' => 'required|string|max:100',
+            'department' => 'required|string|max:50',
+            'numberOfInterns' => 'required|string|max:50',
+            'duration' => 'required|string|max:100',
+            'startDate' => 'required|string|max:50',
+            'endDate' => 'required|string|max:50',
+            'subcategoryWeights' => 'required|array',
+        ]);
+
+        try {
+            // Get the internship
+            $internship = Internship::where('id', $id)
+                ->where('hte_id', $hte->id)
+                ->first();
+
+            if (!$internship) {
+                return redirect()->back()->withErrors(['error' => 'Internship not found.']);
+            }
+
+            // Update Internship record
+            $internship->update([
+                'position_title' => $request->position,
+                'department' => $request->department,
+                'placement_description' => 'Internship opportunity at ' . $hte->company_name . ' - Duration: ' . $request->duration . ' from ' . $request->startDate . ' to ' . $request->endDate,
+                'slot_count' => (int) $request->numberOfInterns,
+            ]);
+
+            // Delete existing weights and create new ones
+            $internship->subcategoryWeights()->delete();
+
+            // Store new subcategory weights
+            foreach ($request->subcategoryWeights as $subcategoryId => $weight) {
+                SubcategoryWeight::create([
+                    'internship_id' => $internship->id,
+                    'subcategory_id' => $subcategoryId,
+                    'weight' => (int) $weight,
+                ]);
+            }
+
+            return redirect()->route('hte.profile')->with('success', 'Internship updated successfully!');
+
+        } catch (\Exception $e) {
+            Log::error('Internship Update Error:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return redirect()->back()->withErrors(['error' => 'An error occurred while updating the internship. Please try again.']);
+        }
+    }
+
+    /**
+     * Extract duration from placement description
+     */
+    private function extractDurationFromDescription($description)
+    {
+        if (preg_match('/Duration: ([^-]+)/', $description, $matches)) {
+            return trim($matches[1]);
+        }
+        return '';
+    }
+
+    /**
+     * Extract start date from placement description
+     */
+    private function extractStartDateFromDescription($description)
+    {
+        if (preg_match('/from ([^to]+) to/', $description, $matches)) {
+            return trim($matches[1]);
+        }
+        return '';
+    }
+
+    /**
+     * Extract end date from placement description
+     */
+    private function extractEndDateFromDescription($description)
+    {
+        if (preg_match('/to (.+)$/', $description, $matches)) {
+            return trim($matches[1]);
+        }
+        return '';
+    }
+
+    /**
+     * Toggle internship status
+     */
+    public function toggleInternshipStatus($id)
+    {
+        $user = Auth::user();
+        $hte = $user->hte;
+        
+        if (!$hte) {
+            return redirect()->back()->withErrors(['error' => 'You must submit an HTE form first.']);
+        }
+
+        try {
+            // Get the internship
+            $internship = Internship::where('id', $id)
+                ->where('hte_id', $hte->id)
+                ->first();
+
+            if (!$internship) {
+                return redirect()->back()->withErrors(['error' => 'Internship not found.']);
+            }
+
+            // Toggle status
+            $internship->update([
+                'is_active' => !$internship->is_active
+            ]);
+
+            $status = $internship->is_active ? 'activated' : 'deactivated';
+            return redirect()->back()->with('success', "Internship {$status} successfully!");
+
+        } catch (\Exception $e) {
+            Log::error('Internship Status Toggle Error:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return redirect()->back()->withErrors(['error' => 'An error occurred while updating the internship status. Please try again.']);
         }
     }
 }

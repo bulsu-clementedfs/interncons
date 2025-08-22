@@ -23,6 +23,8 @@ class Student extends Model
         'address',
         'birth_date',
         'is_submit',
+        'is_active',
+        'is_placed',
     ];
 
     public function user(): BelongsTo
@@ -33,5 +35,15 @@ class Student extends Model
     public function scores(): HasMany
     {
         return $this->hasMany(StudentScore::class);
+    }
+
+    public function matches(): HasMany
+    {
+        return $this->hasMany(StudentMatch::class);
+    }
+
+    public function placement(): HasMany
+    {
+        return $this->hasMany(Placement::class);
     }
 }
