@@ -1,8 +1,9 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { LucideIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
+import { LucideIcon, ChevronDownIcon, ChevronUpIcon, ExternalLinkIcon } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useState } from 'react';
+import { Link } from '@inertiajs/react';
 
 interface InternshipSlot {
     id: number;
@@ -66,28 +67,35 @@ export function StatsCard({ title, value, description, icon: Icon, iconColor = "
                                 <h4 className="text-xs font-medium text-gray-700 mb-2">Individual Internship Slots:</h4>
                                 <div className="space-y-2">
                                     {internshipSlots.map((internship) => (
-                                        <div key={internship.id} className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded">
-                                            <div className="flex-1">
-                                                <div className="font-medium text-gray-900 truncate">
-                                                    {internship.position_title}
+                                        <Link 
+                                            key={internship.id} 
+                                            href={`/hte/internship/${internship.id}`}
+                                            className="block"
+                                        >
+                                            <div className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded hover:bg-gray-100 transition-colors cursor-pointer group">
+                                                <div className="flex-1">
+                                                    <div className="font-medium text-gray-900 truncate group-hover:text-blue-600 transition-colors">
+                                                        {internship.position_title}
+                                                    </div>
+                                                    <div className="text-gray-500 text-xs">
+                                                        {new Date(internship.created_at).toLocaleDateString()}
+                                                    </div>
                                                 </div>
-                                                <div className="text-gray-500 text-xs">
-                                                    {new Date(internship.created_at).toLocaleDateString()}
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`px-2 py-1 rounded-full text-xs ${
+                                                        internship.is_active 
+                                                            ? 'bg-green-100 text-green-800' 
+                                                            : 'bg-gray-100 text-gray-800'
+                                                    }`}>
+                                                        {internship.is_active ? 'Active' : 'Inactive'}
+                                                    </span>
+                                                    <span className="font-bold text-blue-600">
+                                                        {internship.slot_count} slot{internship.slot_count !== 1 ? 's' : ''}
+                                                    </span>
+                                                    <ExternalLinkIcon className="h-3 w-3 text-gray-400 group-hover:text-blue-600 transition-colors" />
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className={`px-2 py-1 rounded-full text-xs ${
-                                                    internship.is_active 
-                                                        ? 'bg-green-100 text-green-800' 
-                                                        : 'bg-gray-100 text-gray-800'
-                                                }`}>
-                                                    {internship.is_active ? 'Active' : 'Inactive'}
-                                                </span>
-                                                <span className="font-bold text-blue-600">
-                                                    {internship.slot_count} slot{internship.slot_count !== 1 ? 's' : ''}
-                                                </span>
-                                            </div>
-                                        </div>
+                                        </Link>
                                     ))}
                                 </div>
                                 <div className="mt-3 pt-2 border-t border-gray-200">

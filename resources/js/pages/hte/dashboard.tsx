@@ -34,6 +34,7 @@ interface HTEDashboardProps {
         cperson_position: string;
         cperson_contactnum: string;
         is_active: boolean;
+        is_submit: boolean;
         created_at: string;
         internships: Array<{
             id: number;
@@ -134,8 +135,8 @@ export default function HTEDashboardPage() {
                     />
                 </div>
 
+                {/* Company Information */}
                 <div className="grid gap-6 md:grid-cols-2">
-                    {/* Company Information */}
                     <CompanyInfoCard
                         companyName={stats.companyName}
                         address={stats.address}

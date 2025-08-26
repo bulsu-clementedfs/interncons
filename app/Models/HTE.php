@@ -24,10 +24,12 @@ class HTE extends Model
         'cperson_position',
         'cperson_contactnum',
         'is_active',
+        'is_submit',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'is_submit' => 'boolean',
     ];
 
     /**

@@ -23,14 +23,56 @@ Route::get('/contact', function () {
 })->name('contact');
 
 Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
+    Route::get('student', function () {
+        return redirect()->route('student-list');
+    })->name('student');
     Route::get('student/list', [StudentController::class, 'index'])->name('student-list');
+    Route::get('student/{student}/edit', [StudentController::class, 'edit'])->name('student.edit');
+    Route::put('student/{student}', [StudentController::class, 'update'])->name('student.update');
+    Route::patch('student/{student}/archive', [StudentController::class, 'archive'])->name('student.archive');
 
-    Route::get('student/matched', function () {
-        return Inertia::render('admin/student/matched');
-    })->name('student-matched');
+    Route::get('student/matched', [StudentController::class, 'getMatchedStudents'])->name('student-matched');
+    Route::get('student/{student}/compatibility-scores', [StudentController::class, 'getStudentCompatibilityScores'])->name('student.compatibility-scores');
+    
+    Route::get('student/{student}/details', [StudentController::class, 'getStudentDetails'])->name('student.details');
+    Route::post('student/{student}/approve-placement', [StudentController::class, 'approvePlacement'])->name('student.approve-placement');
+    Route::post('student/{student}/reject-placement', [StudentController::class, 'rejectPlacement'])->name('student.reject-placement');
 
     Route::get('student/placed', function () {
-        return Inertia::render('admin/student/placed');
+        $placedStudents = \App\Models\StudentPlacement::with(['student.section', 'internship.hte'])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($placement) {
+                return [
+                    'id' => $placement->id,
+                    'student' => [
+                        'id' => $placement->student->id,
+                        'student_number' => $placement->student->student_number,
+                        'first_name' => $placement->student->first_name,
+                        'last_name' => $placement->student->last_name,
+                        'middle_name' => $placement->student->middle_name,
+                        'section' => $placement->student->section->section_name ?? '',
+                        'specialization' => $placement->student->specialization,
+                    ],
+                    'internship' => [
+                        'id' => $placement->internship->id,
+                        'position_title' => $placement->internship->position_title,
+                        'department' => $placement->internship->department,
+                        'hte' => [
+                            'company_name' => $placement->internship->hte->company_name,
+                        ],
+                    ],
+                    'status' => $placement->status,
+                    'compatibility_score' => $placement->compatibility_score,
+                    'admin_notes' => $placement->admin_notes,
+                    'placement_date' => $placement->placement_date,
+                    'created_at' => $placement->created_at,
+                ];
+            });
+            
+        return Inertia::render('admin/student/placed', [
+            'placedStudents' => $placedStudents
+        ]);
     })->name('student-placed');
 
     Route::get('hte', function () {
@@ -57,11 +99,24 @@ Route::middleware(['auth', 'verified', 'role:hte'])->group(function () {
     // Add Internship routes (only accessible after HTE form submission)
     Route::get('hte/add-internship', [App\Http\Controllers\HTEController::class, 'showAddInternship'])->name('hte.add-internship');
     Route::post('hte/add-internship', [App\Http\Controllers\HTEController::class, 'storeInternship'])->name('hte.store-internship');
+    
+    // Edit Internship routes
+    Route::get('hte/edit-internship/{id}', [App\Http\Controllers\HTEController::class, 'showEditInternship'])->name('hte.edit-internship');
+    Route::put('hte/edit-internship/{id}', [App\Http\Controllers\HTEController::class, 'updateInternship'])->name('hte.update-internship');
+    
+    // Toggle Internship Status
+    Route::patch('hte/internship/{id}/toggle-status', [App\Http\Controllers\HTEController::class, 'toggleInternshipStatus'])->name('hte.toggle-internship-status');
+
+    // View Internship Details
+    Route::get('hte/internship/{id}', [App\Http\Controllers\HTEController::class, 'showInternship'])->name('hte.internship-profile');
+
 });
 
 
 
 Route::middleware(['auth', 'verified', 'role:adviser'])->group(function () {
+    Route::get('adviser/dashboard', [AdviserController::class, 'dashboard'])->name('adviser.dashboard');
+    Route::get('students', [AdviserController::class, 'getStudents'])->name('students');
     Route::get('application', [AdviserController::class, 'index'])->name('application');
     Route::post('application/approve', [AdviserController::class, 'approveStudents'])->name('application.approve');
     Route::post('application/reject', [AdviserController::class, 'rejectStudents'])->name('application.reject');
@@ -70,6 +125,141 @@ Route::middleware(['auth', 'verified', 'role:adviser'])->group(function () {
 });
 
 Route::group(['middleware' => ['auth', 'verified', 'role:student']], function () {
+        Route::get('dashboard', function () {
+        $user = Auth::user();
+        $student = $user->student;
+        
+        if (!$student) {
+            return Inertia::render('student/dashboard', [
+                'student' => null,
+                'performance' => null,
+                'possibleInternships' => [],
+                'currentMatch' => null,
+                'hasSubmitted' => false
+            ]);
+        }
+
+        // Check if student has submitted the assessment
+        if (!$student->is_submit) {
+            $formattedStudent = [
+                'id' => $student->id,
+                'student_number' => $student->student_number,
+                'first_name' => $student->first_name,
+                'last_name' => $student->last_name,
+                'middle_name' => $student->middle_name,
+                'section' => $student->section->section_name ?? null,
+                'specialization' => $student->specialization,
+                'is_submit' => $student->is_submit,
+            ];
+
+            return Inertia::render('student/dashboard', [
+                'student' => $formattedStudent,
+                'performance' => null,
+                'possibleInternships' => [],
+                'currentMatch' => null,
+                'hasSubmitted' => false
+            ]);
+        }
+
+        // Get student's scores by category
+        $categories = \App\Models\Category::with(['subCategories' => function ($query) use ($student) {
+            $query->with(['studentScores' => function ($scoreQuery) use ($student) {
+                $scoreQuery->where('student_id', $student->id);
+            }]);
+        }])->get();
+
+        // Calculate overall performance metrics
+        $totalScore = 0;
+        $totalQuestions = 0;
+        $categoryScores = [];
+
+        foreach ($categories as $category) {
+            $categoryScore = 0;
+            $categoryQuestions = 0;
+            
+            foreach ($category->subCategories as $subcategory) {
+                $score = $subcategory->studentScores->first();
+                if ($score) {
+                    $categoryScore += $score->score;
+                    $categoryQuestions++;
+                    $totalScore += $score->score;
+                    $totalQuestions++;
+                }
+            }
+            
+            if ($categoryQuestions > 0) {
+                $categoryScores[] = [
+                    'name' => $category->category_name,
+                    'average_score' => round($categoryScore / $categoryQuestions, 2),
+                    'questions_count' => $categoryQuestions
+                ];
+            }
+        }
+
+        $overallAverage = $totalQuestions > 0 ? round($totalScore / $totalQuestions, 2) : 0;
+
+        // Get possible internships with compatibility scores
+        $matchingService = new \App\Services\MatchingService();
+        
+        // Calculate and store all compatibility scores for this student
+        $matchingService->calculateAndStoreCompatibilityScores($student);
+        
+        // Get top 5 for dashboard display
+        $possibleInternships = $matchingService->getTopCompatibleInternships($student, 5);
+        
+        $possibleInternships = $possibleInternships->map(function ($item) {
+            $internship = $item['internship'];
+            return [
+                'id' => $internship->id,
+                'position_title' => $internship->position_title,
+                'company_name' => $internship->hte->company_name,
+                'department' => $internship->department,
+                'slot_count' => $internship->slot_count,
+                'is_active' => $internship->is_active,
+                'compatibility_score' => $item['compatibility_score'],
+            ];
+        });
+
+        // Get student's current placement status
+        $currentPlacement = \App\Models\StudentPlacement::where('student_id', $student->id)
+            ->where('status', 'approved')
+            ->with(['internship.hte:id,company_name'])
+            ->first();
+
+        $currentMatch = $currentPlacement ? [
+            'id' => $currentPlacement->id,
+            'internship' => [
+                'position_title' => $currentPlacement->internship->position_title,
+                'company_name' => $currentPlacement->internship->hte->company_name,
+            ],
+            'match_score' => $currentPlacement->compatibility_score ?? 0,
+            'status' => $currentPlacement->status ?? 'pending',
+        ] : null;
+
+        $formattedStudent = [
+            'id' => $student->id,
+            'student_number' => $student->student_number,
+            'first_name' => $student->first_name,
+            'last_name' => $student->last_name,
+            'middle_name' => $student->middle_name,
+            'section' => $student->section->section_name ?? null,
+            'specialization' => $student->specialization,
+            'is_submit' => $student->is_submit,
+        ];
+
+        return Inertia::render('student/dashboard', [
+            'student' => $formattedStudent,
+            'performance' => [
+                'overall_average' => $overallAverage,
+                'total_questions' => $totalQuestions,
+                'category_scores' => $categoryScores,
+            ],
+            'possibleInternships' => $possibleInternships,
+            'currentMatch' => $currentMatch,
+            'hasSubmitted' => true
+        ]);
+    })->name('student.dashboard');
+
     Route::get('assessment', function () {
         $subcategories = SubCategory::with(['questions' => function ($query) {
             $query->where('access', 'student');
@@ -90,6 +280,8 @@ Route::group(['middleware' => ['auth', 'verified', 'role:student']], function ()
         $user = Auth::user();
         $student = $user->student;
         
+
+        
         if (!$student) {
             return Inertia::render('student/profile', [
                 'student' => null,
@@ -98,16 +290,35 @@ Route::group(['middleware' => ['auth', 'verified', 'role:student']], function ()
         }
 
         // Check if student has submitted the assessment
+        // Debug: Check the actual value
+        \Illuminate\Support\Facades\Log::info('Profile Route Debug', [
+            'student_id' => $student->id,
+            'is_submit' => $student->is_submit,
+            'is_submit_type' => gettype($student->is_submit),
+            'has_scores' => $student->scores()->count()
+        ]);
+        
         if (!$student->is_submit) {
+            $formattedStudent = [
+                'id' => $student->id,
+                'student_number' => $student->student_number,
+                'first_name' => $student->first_name,
+                'last_name' => $student->last_name,
+                'middle_name' => $student->middle_name,
+                'section' => $student->section->section_name ?? null,
+                'specialization' => $student->specialization,
+                'is_submit' => $student->is_submit,
+            ];
+
             return Inertia::render('student/profile', [
-                'student' => $student,
+                'student' => $formattedStudent,
                 'categories' => [],
                 'hasSubmitted' => false
             ]);
         }
 
         // Get all categories with their subcategories and scores
-        $categories = \App\Models\Category::with(['subCategory' => function ($query) use ($student) {
+        $categories = \App\Models\Category::with(['subCategories' => function ($query) use ($student) {
             $query->with(['studentScores' => function ($scoreQuery) use ($student) {
                 $scoreQuery->where('student_id', $student->id);
             }]);
@@ -118,7 +329,7 @@ Route::group(['middleware' => ['auth', 'verified', 'role:student']], function ()
             return [
                 'id' => $category->id,
                 'name' => $category->category_name,
-                'subcategories' => $category->subCategory->map(function ($subcategory) {
+                'subcategories' => $category->subCategories->map(function ($subcategory) {
                     $score = $subcategory->studentScores->first();
                     return [
                         'id' => $subcategory->id,
@@ -129,8 +340,19 @@ Route::group(['middleware' => ['auth', 'verified', 'role:student']], function ()
             ];
         })->toArray();
 
+        $formattedStudent = [
+            'id' => $student->id,
+            'student_number' => $student->student_number,
+            'first_name' => $student->first_name,
+            'last_name' => $student->last_name,
+            'middle_name' => $student->middle_name,
+            'section' => $student->section->section_name ?? null,
+            'specialization' => $student->specialization,
+            'is_submit' => $student->is_submit,
+        ];
+
         return Inertia::render('student/profile', [
-            'student' => $student,
+            'student' => $formattedStudent,
             'categories' => $transformedCategories,
             'hasSubmitted' => true
         ]);
@@ -143,12 +365,61 @@ Route::group(['middleware' => ['auth', 'verified', 'role:student']], function ()
 });
 
 Route::get('/api/categories-with-subcategories', function () {
-    $categories = \App\Models\Category::with(['subCategory.questions' => function($query) {
+    $categories = \App\Models\Category::with(['subCategories.questions' => function($query) {
         $query->where('is_active', true);
     }])->get();
     
     return response()->json($categories);
 });
+
+// Test route for dynamic sorting demonstration
+Route::get('/test/sorting/{student}', function ($studentId) {
+    $student = \App\Models\Student::find($studentId);
+    if (!$student) {
+        return response()->json(['error' => 'Student not found'], 404);
+    }
+    
+    $matchingService = new \App\Services\MatchingService();
+    
+    // Test different sorting options
+    $scoresByScore = $matchingService->getCompatibilityScoresSorted($student, 'compatibility_score', 'desc');
+    $scoresByRank = $matchingService->getCompatibilityScoresSorted($student, 'rank', 'asc');
+    $scoresByCompany = $matchingService->getCompatibilityScoresSorted($student, 'company_name', 'asc');
+    
+    return response()->json([
+        'student' => [
+            'id' => $student->id,
+            'name' => $student->first_name . ' ' . $student->last_name,
+        ],
+        'sorting_examples' => [
+            'by_score_desc' => $scoresByScore->take(5)->map(function($score) {
+                return [
+                    'company' => $score['internship']->hte->company_name,
+                    'position' => $score['internship']->position_title,
+                    'score' => $score['compatibility_score'],
+                    'rank' => $score['rank'],
+                ];
+            }),
+            'by_rank_asc' => $scoresByRank->take(5)->map(function($score) {
+                return [
+                    'company' => $score['internship']->hte->company_name,
+                    'position' => $score['internship']->position_title,
+                    'score' => $score['compatibility_score'],
+                    'rank' => $score['rank'],
+                ];
+            }),
+            'by_company_asc' => $scoresByCompany->take(5)->map(function($score) {
+                return [
+                    'company' => $score['internship']->hte->company_name,
+                    'position' => $score['internship']->position_title,
+                    'score' => $score['compatibility_score'],
+                    'rank' => $score['rank'],
+                ];
+            }),
+        ],
+        'total_internships' => $scoresByScore->count(),
+    ]);
+})->name('test.sorting');
 
 
 require __DIR__.'/settings.php';

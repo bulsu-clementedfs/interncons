@@ -68,6 +68,7 @@ class HTEController extends Controller
             'duration' => 'required|string|max:100',
             'startDate' => 'required|string|max:50',
             'endDate' => 'required|string|max:50',
+
             'subcategoryWeights' => 'required|array',
         ]);
 
@@ -90,6 +91,7 @@ class HTEController extends Controller
                 'cperson_position' => $request->position,
                 'cperson_contactnum' => $request->phone,
                 'is_active' => true,
+                'is_submit' => true,
             ]);
 
             Log::info('HTE Record Created:', ['hte_id' => $hte->id]);
@@ -218,17 +220,41 @@ class HTEController extends Controller
             return redirect()->route('form');
         }
 
+        // Check if HTE has submitted the assessment form
+        if (!$hte->is_submit) {
+            return redirect()->route('form')->with('warning', 'Please complete the assessment form first before accessing your profile.');
+        }
+
         // Get HTE with related data including categories
         $hteWithData = HTE::with([
             'internships.subcategoryWeights.subcategory.category'
         ])->find($hte->id);
+
+        // Transform the data to match frontend expectations
+        $hteWithData->internships->transform(function($internship) {
+            $internship->subcategory_weights = $internship->subcategoryWeights->map(function($weight) {
+                return [
+                    'id' => $weight->id,
+                    'weight' => $weight->weight,
+                    'subcategory' => [
+                        'id' => $weight->subcategory->id,
+                        'subcategory_name' => $weight->subcategory->subcategory_name,
+                        'category' => [
+                            'id' => $weight->subcategory->category->id,
+                            'category_name' => $weight->subcategory->category->category_name,
+                        ]
+                    ]
+                ];
+            });
+            return $internship;
+        });
 
         // Debug: Log the data being sent to the frontend
         Log::info('HTE Profile Data:', [
             'hte_id' => $hteWithData->id,
             'internships_count' => $hteWithData->internships ? $hteWithData->internships->count() : 0,
             'first_internship_subcategory_weights_count' => $hteWithData->internships && $hteWithData->internships->first() 
-                ? ($hteWithData->internships->first()->subcategoryWeights ? $hteWithData->internships->first()->subcategoryWeights->count() : 0) 
+                ? ($hteWithData->internships->first()->subcategory_weights ? $hteWithData->internships->first()->subcategory_weights->count() : 0) 
                 : 0
         ]);
 
@@ -249,6 +275,11 @@ class HTEController extends Controller
             return redirect()->route('form');
         }
 
+        // Check if HTE has submitted the assessment form
+        if (!$hte->is_submit) {
+            return redirect()->route('form')->with('warning', 'Please complete the assessment form first before accessing the dashboard.');
+        }
+
         // Get comprehensive dashboard data
         $dashboardData = HTE::with([
             'internships' => function($query) {
@@ -256,6 +287,21 @@ class HTEController extends Controller
             },
             'user'
         ])->find($hte->id);
+
+        // Transform the data to match frontend expectations
+        $dashboardData->internships->transform(function($internship) {
+            $internship->subcategory_weights = $internship->subcategoryWeights->map(function($weight) {
+                return [
+                    'id' => $weight->id,
+                    'weight' => $weight->weight,
+                    'subcategory' => [
+                        'id' => $weight->subcategory->id,
+                        'subcategory_name' => $weight->subcategory->subcategory_name,
+                    ]
+                ];
+            });
+            return $internship;
+        });
 
         // Get statistics
         $totalInternships = $dashboardData->internships->count();
@@ -299,6 +345,11 @@ class HTEController extends Controller
         
         if (!$hte) {
             return redirect()->route('form');
+        }
+
+        // Check if HTE has submitted the assessment form
+        if (!$hte->is_submit) {
+            return redirect()->route('form')->with('warning', 'Please complete the assessment form first before adding internships.');
         }
 
         // Get categories for criteria selection
@@ -356,10 +407,15 @@ class HTEController extends Controller
             return redirect()->back()->withErrors(['error' => 'You must submit an HTE form first.']);
         }
 
+        // Check if HTE has submitted the assessment form
+        if (!$hte->is_submit) {
+            return redirect()->back()->withErrors(['error' => 'Please complete the assessment form first before adding internships.']);
+        }
+
         // Validate the request
         $request->validate([
             'position' => 'required|string|max:100',
-            'department' => 'required|string|max:100',
+            'department' => 'required|string|max:50',
             'numberOfInterns' => 'required|string|max:50',
             'duration' => 'required|string|max:100',
             'startDate' => 'required|string|max:50',
@@ -395,6 +451,301 @@ class HTEController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
             return redirect()->back()->withErrors(['error' => 'An error occurred while creating the internship. Please try again.']);
+        }
+    }
+
+    /**
+     * Show Internship details
+     */
+    public function showInternship($id)
+    {
+        $user = Auth::user();
+        $hte = $user->hte;
+        
+        if (!$hte) {
+            return redirect()->route('form');
+        }
+
+        // Check if HTE has submitted the assessment form
+        if (!$hte->is_submit) {
+            return redirect()->route('form')->with('warning', 'Please complete the assessment form first before viewing internship details.');
+        }
+
+        // Get the internship with its weights and related data
+        $internship = Internship::with(['subcategoryWeights.subcategory.category'])
+            ->where('id', $id)
+            ->where('hte_id', $hte->id)
+            ->first();
+
+        if (!$internship) {
+            return redirect()->route('hte.dashboard')->withErrors(['error' => 'Internship not found.']);
+        }
+
+        // Transform the data for display
+        $internshipData = [
+            'id' => $internship->id,
+            'position_title' => $internship->position_title,
+            'department' => $internship->department,
+            'slot_count' => $internship->slot_count,
+            'placement_description' => $internship->placement_description,
+            'is_active' => $internship->is_active,
+            'created_at' => $internship->created_at,
+            'updated_at' => $internship->updated_at,
+            'subcategory_weights' => $internship->subcategoryWeights->map(function($weight) {
+                return [
+                    'id' => $weight->id,
+                    'weight' => $weight->weight,
+                    'subcategory' => [
+                        'id' => $weight->subcategory->id,
+                        'subcategory_name' => $weight->subcategory->subcategory_name,
+                        'category' => [
+                            'id' => $weight->subcategory->category->id,
+                            'category_name' => $weight->subcategory->category->category_name,
+                        ]
+                    ]
+                ];
+            })->toArray()
+        ];
+
+        return Inertia::render('hte/internship-profile', [
+            'hte' => $hte,
+            'internship' => $internshipData
+        ]);
+    }
+
+    /**
+     * Show Edit Internship form
+     */
+    public function showEditInternship($id)
+    {
+        $user = Auth::user();
+        $hte = $user->hte;
+        
+        if (!$hte) {
+            return redirect()->route('form');
+        }
+
+        // Check if HTE has submitted the assessment form
+        if (!$hte->is_submit) {
+            return redirect()->route('form')->with('warning', 'Please complete the assessment form first before editing internships.');
+        }
+
+        // Get the internship with its weights
+        $internship = Internship::with(['subcategoryWeights.subcategory.category'])
+            ->where('id', $id)
+            ->where('hte_id', $hte->id)
+            ->first();
+
+        if (!$internship) {
+            return redirect()->route('hte.profile')->withErrors(['error' => 'Internship not found.']);
+        }
+
+        // Get categories for criteria selection
+        $categories = Category::with(['subCategories.questions' => function($query) {
+            $query->where('is_active', true);
+        }])
+        ->where('category_name', '!=', 'Basic Information')
+        ->get();
+
+        // Transform the data to ensure proper structure for frontend
+        $transformedCategories = $categories->map(function($category) {
+            return [
+                'id' => $category->id,
+                'category_name' => $category->category_name,
+                'created_at' => $category->created_at,
+                'updated_at' => $category->updated_at,
+                'subCategories' => $category->subCategories->map(function($subCategory) {
+                    return [
+                        'id' => $subCategory->id,
+                        'subcategory_name' => $subCategory->subcategory_name,
+                        'category_id' => $subCategory->category_id,
+                        'created_at' => $subCategory->created_at,
+                        'updated_at' => $subCategory->updated_at,
+                        'questions' => $subCategory->questions->map(function($question) {
+                            return [
+                                'id' => $question->id,
+                                'question' => $question->question,
+                                'access' => $question->access,
+                                'is_active' => (bool) $question->is_active,
+                                'subcategory_id' => $question->subcategory_id,
+                                'created_at' => $question->created_at,
+                                'updated_at' => $question->updated_at,
+                            ];
+                        })->toArray()
+                    ];
+                })->toArray()
+            ];
+        });
+
+        // Extract internship data for editing
+        $internshipData = [
+            'id' => $internship->id,
+            'position' => $internship->position_title,
+            'department' => $internship->department,
+            'numberOfInterns' => (string) $internship->slot_count,
+            'duration' => $this->extractDurationFromDescription($internship->placement_description),
+            'startDate' => $this->extractStartDateFromDescription($internship->placement_description),
+            'endDate' => $this->extractEndDateFromDescription($internship->placement_description),
+            'is_active' => $internship->is_active,
+        ];
+
+        // Extract existing weights
+        $existingWeights = [];
+        foreach ($internship->subcategoryWeights as $weight) {
+            $existingWeights[$weight->subcategory_id] = $weight->weight;
+        }
+
+        return Inertia::render('hte/edit-internship', [
+            'hte' => $hte,
+            'categories' => $transformedCategories,
+            'internship' => $internshipData,
+            'existingWeights' => $existingWeights
+        ]);
+    }
+
+    /**
+     * Update existing internship
+     */
+    public function updateInternship(Request $request, $id): RedirectResponse
+    {
+        $user = Auth::user();
+        $hte = $user->hte;
+        
+        if (!$hte) {
+            return redirect()->back()->withErrors(['error' => 'You must submit an HTE form first.']);
+        }
+
+        // Check if HTE has submitted the assessment form
+        if (!$hte->is_submit) {
+            return redirect()->back()->withErrors(['error' => 'Please complete the assessment form first before updating internships.']);
+        }
+
+        // Validate the request
+        $request->validate([
+            'position' => 'required|string|max:100',
+            'department' => 'required|string|max:50',
+            'numberOfInterns' => 'required|string|max:50',
+            'duration' => 'required|string|max:100',
+            'startDate' => 'required|string|max:50',
+            'endDate' => 'required|string|max:50',
+            'subcategoryWeights' => 'required|array',
+        ]);
+
+        try {
+            // Get the internship
+            $internship = Internship::where('id', $id)
+                ->where('hte_id', $hte->id)
+                ->first();
+
+            if (!$internship) {
+                return redirect()->back()->withErrors(['error' => 'Internship not found.']);
+            }
+
+            // Update Internship record
+            $internship->update([
+                'position_title' => $request->position,
+                'department' => $request->department,
+                'placement_description' => 'Internship opportunity at ' . $hte->company_name . ' - Duration: ' . $request->duration . ' from ' . $request->startDate . ' to ' . $request->endDate,
+                'slot_count' => (int) $request->numberOfInterns,
+            ]);
+
+            // Delete existing weights and create new ones
+            $internship->subcategoryWeights()->delete();
+
+            // Store new subcategory weights
+            foreach ($request->subcategoryWeights as $subcategoryId => $weight) {
+                SubcategoryWeight::create([
+                    'internship_id' => $internship->id,
+                    'subcategory_id' => $subcategoryId,
+                    'weight' => (int) $weight,
+                ]);
+            }
+
+            return redirect()->route('hte.profile')->with('success', 'Internship updated successfully!');
+
+        } catch (\Exception $e) {
+            Log::error('Internship Update Error:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return redirect()->back()->withErrors(['error' => 'An error occurred while updating the internship. Please try again.']);
+        }
+    }
+
+    /**
+     * Extract duration from placement description
+     */
+    private function extractDurationFromDescription($description)
+    {
+        if (preg_match('/Duration: ([^-]+)/', $description, $matches)) {
+            return trim($matches[1]);
+        }
+        return '';
+    }
+
+    /**
+     * Extract start date from placement description
+     */
+    private function extractStartDateFromDescription($description)
+    {
+        if (preg_match('/from ([^to]+) to/', $description, $matches)) {
+            return trim($matches[1]);
+        }
+        return '';
+    }
+
+    /**
+     * Extract end date from placement description
+     */
+    private function extractEndDateFromDescription($description)
+    {
+        if (preg_match('/to (.+)$/', $description, $matches)) {
+            return trim($matches[1]);
+        }
+        return '';
+    }
+
+    /**
+     * Toggle internship status
+     */
+    public function toggleInternshipStatus($id)
+    {
+        $user = Auth::user();
+        $hte = $user->hte;
+        
+        if (!$hte) {
+            return redirect()->back()->withErrors(['error' => 'You must submit an HTE form first.']);
+        }
+
+        // Check if HTE has submitted the assessment form
+        if (!$hte->is_submit) {
+            return redirect()->back()->withErrors(['error' => 'Please complete the assessment form first before managing internships.']);
+        }
+
+        try {
+            // Get the internship
+            $internship = Internship::where('id', $id)
+                ->where('hte_id', $hte->id)
+                ->first();
+
+            if (!$internship) {
+                return redirect()->back()->withErrors(['error' => 'Internship not found.']);
+            }
+
+            // Toggle status
+            $internship->update([
+                'is_active' => !$internship->is_active
+            ]);
+
+            $status = $internship->is_active ? 'activated' : 'deactivated';
+            return redirect()->back()->with('success', "Internship {$status} successfully!");
+
+        } catch (\Exception $e) {
+            Log::error('Internship Status Toggle Error:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return redirect()->back()->withErrors(['error' => 'An error occurred while updating the internship status. Please try again.']);
         }
     }
 }
