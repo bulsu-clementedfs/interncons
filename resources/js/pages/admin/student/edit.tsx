@@ -4,6 +4,7 @@ import AdminLayout from '@/layouts/admin/layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -23,17 +24,28 @@ interface Student {
     first_name: string;
     middle_name?: string;
     last_name: string;
+    section_id: number;
     section: string;
     specialization?: string;
 }
 
-export default function EditStudent({ student }: { student: Student }) {
+interface Section {
+    section_id: number;
+    section_name: string;
+}
+
+interface Props {
+    student: Student;
+    sections: Section[];
+}
+
+export default function EditStudent({ student, sections }: Props) {
     const { data, setData, put, processing, errors } = useForm({
         student_number: student.student_number,
         first_name: student.first_name,
         middle_name: student.middle_name || '',
         last_name: student.last_name,
-        section: student.section,
+        section_id: student.section_id,
         specialization: student.specialization || '',
     });
 
@@ -71,16 +83,24 @@ export default function EditStudent({ student }: { student: Student }) {
                                     )}
                                 </div>
                                 <div>
-                                    <Label htmlFor="section">Section</Label>
-                                    <Input
-                                        id="section"
-                                        type="text"
-                                        value={data.section}
-                                        onChange={(e) => setData('section', e.target.value)}
-                                        className={errors.section ? 'border-red-500' : ''}
-                                    />
-                                    {errors.section && (
-                                        <p className="text-red-500 text-sm mt-1">{errors.section}</p>
+                                    <Label htmlFor="section_id">Section</Label>
+                                    <Select
+                                        value={data.section_id.toString()}
+                                        onValueChange={(value) => setData('section_id', parseInt(value))}
+                                    >
+                                        <SelectTrigger className={errors.section_id ? 'border-red-500' : ''}>
+                                            <SelectValue placeholder="Select a section" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {sections.map((section) => (
+                                                <SelectItem key={section.section_id} value={section.section_id.toString()}>
+                                                    {section.section_name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {errors.section_id && (
+                                        <p className="text-red-500 text-sm mt-1">{errors.section_id}</p>
                                     )}
                                 </div>
                             </div>

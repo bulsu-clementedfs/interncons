@@ -15,6 +15,7 @@ import {
     CategoryWeightsCard, 
     QuickActionsCard 
 } from '@/components/dashboard';
+import { SubmissionPrompt } from '@/components/hte/submission-prompt';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -71,11 +72,12 @@ interface HTEDashboardProps {
         phone: string;
         address: string;
     };
+    showSubmissionPrompt: boolean;
     [key: string]: any;
 }
 
 export default function HTEDashboardPage() {
-    const { hte, stats } = usePage<HTEDashboardProps>().props;
+    const { hte, stats, showSubmissionPrompt } = usePage<HTEDashboardProps>().props;
 
     // Add defensive programming to handle missing data
     if (!hte) {
@@ -101,6 +103,15 @@ export default function HTEDashboardPage() {
                         Welcome back! Here's an overview of your company and internship opportunities.
                     </p>
                 </div>
+
+                {/* Submission Prompt */}
+                <SubmissionPrompt 
+                    showPrompt={showSubmissionPrompt}
+                    title="Complete Your Assessment Form"
+                    description="Please complete the assessment form first to access all features and manage your internships effectively."
+                    buttonText="Complete Form"
+                    buttonHref="/form"
+                />
 
                 {/* Stats Cards */}
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

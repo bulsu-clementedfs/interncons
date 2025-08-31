@@ -17,7 +17,6 @@ class StudentPlacement extends Model
         'internship_id',
         'status',
         'compatibility_score',
-        'admin_notes',
         'placement_date',
     ];
 

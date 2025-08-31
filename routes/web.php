@@ -1,11 +1,13 @@
 <?php
 
 use App\Http\Controllers\Admin\StudentController;
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\AdviserController;
 use App\Http\Controllers\HTEController;
 use App\Models\Question;
 use App\Models\SubCategory;
+use App\Models\StudentMatch;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -22,70 +24,76 @@ Route::get('/contact', function () {
     return Inertia::render('contact');
 })->name('contact');
 
+// CSRF token refresh route
+Route::get('/csrf-token', function () {
+return response()->json(['token' => csrf_token()]);
+})->middleware('web');
+
+
+
 Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {
+    Route::get('admin-dashboard', [AdminController::class, 'dashboard'])->name('admin.dashboard');
+    
+    // HTE Management routes
+    Route::get('hte', [AdminController::class, 'hteManagement'])->name('admin.hte');
+    Route::post('hte', [AdminController::class, 'storeHTE'])->name('admin.hte.store');
+    Route::put('hte/{hte}', [AdminController::class, 'updateHTE'])->name('admin.hte.update');
+    Route::patch('hte/{hte}/archive', [AdminController::class, 'archiveHTE'])->name('admin.hte.archive');
+    
+    // Adviser Management routes
+    Route::get('adviser', [AdminController::class, 'adviserManagement'])->name('admin.adviser');
+    Route::post('adviser', [AdminController::class, 'storeAdviser'])->name('admin.adviser.store');
+    Route::put('adviser/{adviser}', [AdminController::class, 'updateAdviser'])->name('admin.adviser.update');
+    Route::patch('adviser/{adviser}/archive', [AdminController::class, 'archiveAdviser'])->name('admin.adviser.archive');
+    
+    // Events Management routes
+    Route::get('admin/events', [AdminController::class, 'eventsManagement'])->name('admin.events');
+    Route::post('admin/deadlines', [AdminController::class, 'storeDeadline'])->name('admin.deadlines.store');
+    Route::put('admin/deadlines/{deadline}', [AdminController::class, 'updateDeadline'])->name('admin.deadlines.update');
+    Route::delete('admin/deadlines/{deadline}', [AdminController::class, 'deleteDeadline'])->name('admin.deadlines.delete');
+    
+    // Forms Management routes
+    Route::get('admin/forms', [App\Http\Controllers\QuestionController::class, 'index'])->name('admin.forms');
+    Route::post('admin/questions', [App\Http\Controllers\QuestionController::class, 'store'])->name('admin.questions.store');
+    Route::put('admin/questions/{question}', [App\Http\Controllers\QuestionController::class, 'update'])->name('admin.questions.update');
+    Route::patch('admin/questions/{question}/archive', [App\Http\Controllers\QuestionController::class, 'archive'])->name('admin.questions.archive');
+    Route::patch('admin/questions/{question}/restore', [App\Http\Controllers\QuestionController::class, 'restore'])->name('admin.questions.restore');
+    Route::get('admin/categories/{category}/subcategories', [App\Http\Controllers\QuestionController::class, 'getSubcategories'])->name('admin.categories.subcategories');
+    
     Route::get('student', function () {
         return redirect()->route('student-list');
     })->name('student');
     Route::get('student/list', [StudentController::class, 'index'])->name('student-list');
+    Route::get('student/unverified', [StudentController::class, 'unverified'])->name('student-unverified');
+    
+    // Specific student routes (must come before parameterized routes)
+    Route::get('student/matched', [StudentController::class, 'getMatchedStudents'])->name('student-matched');
+    Route::post('student/batch-approve-placements', [StudentController::class, 'approveBatchPlacements'])->name('student.batch-approve-placements');
+    Route::get('student/placed', [StudentController::class, 'getPlacedStudents'])->name('student-placed');
+    
+    // Parameterized student routes (must come after specific routes)
     Route::get('student/{student}/edit', [StudentController::class, 'edit'])->name('student.edit');
     Route::put('student/{student}', [StudentController::class, 'update'])->name('student.update');
     Route::patch('student/{student}/archive', [StudentController::class, 'archive'])->name('student.archive');
-
-    Route::get('student/matched', [StudentController::class, 'getMatchedStudents'])->name('student-matched');
     Route::get('student/{student}/compatibility-scores', [StudentController::class, 'getStudentCompatibilityScores'])->name('student.compatibility-scores');
-    
     Route::get('student/{student}/details', [StudentController::class, 'getStudentDetails'])->name('student.details');
     Route::post('student/{student}/approve-placement', [StudentController::class, 'approvePlacement'])->name('student.approve-placement');
     Route::post('student/{student}/reject-placement', [StudentController::class, 'rejectPlacement'])->name('student.reject-placement');
+    
+    // Unverified user routes
+    Route::get('student/unverified/{user}/edit', [StudentController::class, 'editUnverifiedUser'])->name('student.unverified.edit');
+    Route::put('student/unverified/{user}', [StudentController::class, 'updateUnverifiedUser'])->name('student.unverified.update');
+    Route::patch('student/unverified/{user}/archive', [StudentController::class, 'archiveUnverifiedUser'])->name('student.unverified.archive');
 
-    Route::get('student/placed', function () {
-        $placedStudents = \App\Models\StudentPlacement::with(['student.section', 'internship.hte'])
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($placement) {
-                return [
-                    'id' => $placement->id,
-                    'student' => [
-                        'id' => $placement->student->id,
-                        'student_number' => $placement->student->student_number,
-                        'first_name' => $placement->student->first_name,
-                        'last_name' => $placement->student->last_name,
-                        'middle_name' => $placement->student->middle_name,
-                        'section' => $placement->student->section->section_name ?? '',
-                        'specialization' => $placement->student->specialization,
-                    ],
-                    'internship' => [
-                        'id' => $placement->internship->id,
-                        'position_title' => $placement->internship->position_title,
-                        'department' => $placement->internship->department,
-                        'hte' => [
-                            'company_name' => $placement->internship->hte->company_name,
-                        ],
-                    ],
-                    'status' => $placement->status,
-                    'compatibility_score' => $placement->compatibility_score,
-                    'admin_notes' => $placement->admin_notes,
-                    'placement_date' => $placement->placement_date,
-                    'created_at' => $placement->created_at,
-                ];
-            });
-            
-        return Inertia::render('admin/student/placed', [
-            'placedStudents' => $placedStudents
-        ]);
-    })->name('student-placed');
 
-    Route::get('hte', function () {
-        return Inertia::render('admin/hte');
-    })->name('hte');
 
     Route::get('placement', function () {
         return Inertia::render('admin/placement');
     })->name('placement');
 
-    Route::get('report', function () {
-        return Inertia::render('admin/report');
-    })->name('report');
+    Route::get('report', [App\Http\Controllers\AdminController::class, 'report'])->name('report');
+    Route::get('report/export/pdf', [App\Http\Controllers\AdminController::class, 'exportPDF'])->name('report.export.pdf');
+    Route::get('report/export/excel', [App\Http\Controllers\AdminController::class, 'exportExcel'])->name('report.export.excel');
 });
 
 Route::middleware(['auth', 'verified', 'role:hte'])->group(function () {
@@ -107,8 +115,7 @@ Route::middleware(['auth', 'verified', 'role:hte'])->group(function () {
     // Toggle Internship Status
     Route::patch('hte/internship/{id}/toggle-status', [App\Http\Controllers\HTEController::class, 'toggleInternshipStatus'])->name('hte.toggle-internship-status');
 
-    // View Internship Details
-    Route::get('hte/internship/{id}', [App\Http\Controllers\HTEController::class, 'showInternship'])->name('hte.internship-profile');
+
 
 });
 
@@ -262,7 +269,7 @@ Route::group(['middleware' => ['auth', 'verified', 'role:student']], function ()
 
     Route::get('assessment', function () {
         $subcategories = SubCategory::with(['questions' => function ($query) {
-            $query->where('access', 'student');
+            $query->where('access', 'Student');
         }])->get();
 
         // Check if the authenticated user's student record has already submitted the assessment
@@ -362,6 +369,220 @@ Route::group(['middleware' => ['auth', 'verified', 'role:student']], function ()
     Route::get('assessment/language-proficiency', [AssessmentController::class, 'getLanguageProficiency'])->name('assessment.language-proficiency');
     Route::get('assessment/technical-skills', [AssessmentController::class, 'getTechnicalSkills'])->name('assessment.technical-skills');
     Route::get('assessment/soft-skills', [AssessmentController::class, 'getSoftSkills'])->name('assessment.soft-skills');
+    
+
+    
+    // Student details route for comparison modal
+    Route::get('details', function () {
+        $user = Auth::user();
+        $student = $user->student;
+        
+        if (!$student || !$student->is_submit) {
+            return response()->json(['error' => 'Student not found or assessment not submitted'], 404);
+        }
+        
+        $student->load([
+            'scores.subcategory.category',
+            'section'
+        ]);
+        
+        // Debug: Check what's being loaded
+        \Illuminate\Support\Facades\Log::info('Student Details Debug', [
+            'student_id' => $student->id,
+            'scores_count' => $student->scores->count(),
+            'scores_with_relationships' => $student->scores->map(function($score) {
+                return [
+                    'score_id' => $score->id,
+                    'subcategory_id' => $score->sub_category_id,
+                    'score_value' => $score->score,
+                    'subcategory_name' => $score->subcategory->subcategory_name ?? 'NULL',
+                    'category_name' => $score->subcategory->category->name ?? 'NULL',
+                ];
+            })->toArray()
+        ]);
+        
+        // Get the best matching internship
+        $activeInternships = \App\Models\Internship::with(['hte:id,company_name', 'subcategoryWeights.subcategory.category'])
+            ->where('is_active', true)
+            ->where('slot_count', '>', 0)
+            ->get();
+        
+        $bestMatch = null;
+        $highestScore = 0;
+        
+        // Use the matching service to get all compatibility scores
+        $matchingService = new \App\Services\MatchingService();
+        $matchingService->calculateAndStoreCompatibilityScores($student);
+        
+        // Get the best match from stored scores
+        $bestMatchData = StudentMatch::where('student_id', $student->id)
+            ->with([
+                'internship.hte:id,company_name', 
+                'internship.subcategoryWeights.subcategory.category'
+            ])
+            ->orderBy('compatibility_score', 'desc')
+            ->first();
+        
+        if ($bestMatchData) {
+            $bestMatch = [
+                'internship' => $bestMatchData->internship,
+                'compatibility_score' => $bestMatchData->compatibility_score,
+            ];
+            
+            // Debug: Check internship criteria
+            \Illuminate\Support\Facades\Log::info('Best Match Debug', [
+                'internship_id' => $bestMatchData->internship->id,
+                'subcategory_weights_count' => $bestMatchData->internship->subcategoryWeights->count(),
+                'subcategory_weights' => $bestMatchData->internship->subcategoryWeights->map(function($weight) {
+                    return [
+                        'weight_id' => $weight->id,
+                        'subcategory_id' => $weight->subcategory_id,
+                        'weight_value' => $weight->weight,
+                        'subcategory_name' => $weight->subcategory->subcategory_name ?? 'NULL',
+                        'category_name' => $weight->subcategory->category->name ?? 'NULL',
+                    ];
+                })->toArray()
+            ]);
+        } else {
+            // Fallback: get the best match from active internships
+            foreach ($activeInternships as $internship) {
+                // Calculate compatibility manually since the method is private
+                $totalScore = 0;
+                $totalWeight = 0;
+                
+                foreach ($internship->subcategoryWeights as $weight) {
+                    $subcategoryId = $weight->subcategory_id;
+                    $weightValue = $weight->weight;
+                    
+                    // Get student's score for this subcategory
+                    $studentScore = $student->scores->where('sub_category_id', $subcategoryId)->first();
+                    
+                    if ($studentScore) {
+                        // Convert student score (1-5 scale) to percentage (0-100)
+                        $scorePercentage = ($studentScore->score / 5) * 100;
+                        
+                        // Apply weight to the score
+                        $weightedScore = $scorePercentage * ($weightValue / 100);
+                        
+                        $totalScore += $weightedScore;
+                        $totalWeight += $weightValue;
+                    }
+                }
+                
+                // Calculate final compatibility score
+                $compatibilityScore = 0;
+                if ($totalWeight > 0) {
+                    $compatibilityScore = round(($totalScore / $totalWeight) * 100, 2);
+                }
+                
+                if ($compatibilityScore > $highestScore) {
+                    $highestScore = $compatibilityScore;
+                    $bestMatch = [
+                        'internship' => $internship,
+                        'compatibility_score' => $compatibilityScore,
+                    ];
+                }
+            }
+        }
+        
+        // Get detailed scores breakdown
+        $scoresBreakdown = $student->scores->map(function ($score) {
+            return [
+                'category' => $score->subcategory->category->name,
+                'subcategory' => $score->subcategory->name,
+                'score' => $score->score,
+                'score_percentage' => ($score->score / 5) * 100,
+            ];
+        });
+        
+        return response()->json([
+            'student' => [
+                'id' => $student->id,
+                'student_number' => $student->student_number,
+                'first_name' => $student->first_name,
+                'last_name' => $student->last_name,
+                'middle_name' => $student->middle_name,
+                'section' => $student->section->section_name ?? '',
+                'specialization' => $student->specialization,
+            ],
+            'best_match' => $bestMatch,
+            'scores_breakdown' => $scoresBreakdown,
+        ]);
+    })->name('student.own-details');
+
+    // Student matched route to view their compatibility scores and potential matches
+    Route::get('matched', function () {
+        $user = Auth::user();
+        $student = $user->student;
+        
+        if (!$student || !$student->is_submit) {
+            return Inertia::render('student/matched', [
+                'student' => null,
+                'compatibilityScores' => [],
+                'currentMatch' => null,
+                'hasSubmitted' => false
+            ]);
+        }
+        
+        // Use the matching service to get all compatibility scores
+        $matchingService = new \App\Services\MatchingService();
+        $matchingService->calculateAndStoreCompatibilityScores($student);
+        
+        // Get all compatibility scores for this student
+        $compatibilityScores = \App\Models\StudentMatch::where('student_id', $student->id)
+            ->with(['internship.hte:id,company_name', 'internship.subcategoryWeights.subcategory.category'])
+            ->orderBy('compatibility_score', 'desc')
+            ->get()
+            ->map(function ($match) {
+                return [
+                    'id' => $match->id,
+                    'internship' => [
+                        'id' => $match->internship->id,
+                        'position_title' => $match->internship->position_title,
+                        'company_name' => $match->internship->hte->company_name,
+                        'department' => $match->internship->department,
+                        'slot_count' => $match->internship->slot_count,
+                        'is_active' => $match->internship->is_active,
+                    ],
+                    'compatibility_score' => $match->compatibility_score,
+                    'rank' => $match->rank,
+                ];
+            });
+        
+        // Get student's current placement status
+        $currentMatch = \App\Models\StudentPlacement::where('student_id', $student->id)
+            ->where('status', 'approved')
+            ->with(['internship.hte:id,company_name'])
+            ->first();
+        
+        $currentMatchData = $currentMatch ? [
+            'id' => $currentMatch->id,
+            'internship' => [
+                'position_title' => $currentMatch->internship->position_title,
+                'company_name' => $currentMatch->internship->hte->company_name,
+            ],
+            'match_score' => $currentMatch->compatibility_score ?? 0,
+            'status' => $currentMatch->status ?? 'pending',
+        ] : null;
+        
+        $formattedStudent = [
+            'id' => $student->id,
+            'student_number' => $student->student_number,
+            'first_name' => $student->first_name,
+            'last_name' => $student->last_name,
+            'middle_name' => $student->middle_name,
+            'section' => $student->section->section_name ?? null,
+            'specialization' => $student->specialization,
+            'is_submit' => $student->is_submit,
+        ];
+        
+        return Inertia::render('student/matched', [
+            'student' => $formattedStudent,
+            'compatibilityScores' => $compatibilityScores,
+            'currentMatch' => $currentMatchData,
+            'hasSubmitted' => true
+        ]);
+    })->name('student.matched');
 });
 
 Route::get('/api/categories-with-subcategories', function () {

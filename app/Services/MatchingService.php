@@ -66,8 +66,17 @@ class MatchingService
                 'internship_id' => $scoreData['internship']->id,
                 'compatibility_score' => $scoreData['compatibility_score'],
                 'rank' => $scoreData['rank'],
+                'status' => 'pending', // Default status for new matches
             ]);
         }
+    }
+
+    /**
+     * Update existing student matches to have default status if null
+     */
+    public function updateExistingMatchesStatus(): void
+    {
+        StudentMatch::whereNull('status')->update(['status' => 'pending']);
     }
 
     /**
@@ -84,6 +93,7 @@ class MatchingService
                     'internship' => $match->internship,
                     'compatibility_score' => $match->compatibility_score,
                     'rank' => $match->rank,
+                    'status' => $match->status,
                 ];
             });
     }

@@ -90,7 +90,6 @@ export default function HTEForm() {
             duration: '',
             startDate: '',
             endDate: '',
-
             subcategoryWeights: {},
         },
     });
@@ -160,6 +159,11 @@ export default function HTEForm() {
     function onSubmit(values: FormData) {
         setIsSubmitting(true);
         
+        // Debug: Log the form data being sent
+        console.log('HTE Form Submission - Form Data:', values);
+        console.log('Subcategory Weights:', values.subcategoryWeights);
+        console.log('Subcategory Weights Count:', Object.keys(values.subcategoryWeights || {}).length);
+        
         // Validate that all subcategory weights are properly set
         const weights = values.subcategoryWeights || {};
         const weightKeys = Object.keys(weights);
@@ -186,18 +190,24 @@ export default function HTEForm() {
             ...values,
         };
         
-        // Debug: Log the form data being sent
-        console.log('HTE Form Submission - Form Data:', formData);
-        console.log('Subcategory Weights:', formData.subcategoryWeights);
-        console.log('Subcategory Weights Count:', Object.keys(formData.subcategoryWeights).length);
+        console.log('Proceeding with form submission...');
         
         router.post('/hte/submit', formData, {
-            onSuccess: () => {
+            onSuccess: (page) => {
+                console.log('Form submission successful:', page);
                 setIsSubmitted(true);
                 setIsSubmitting(false);
             },
-            onError: () => {
+            onError: (errors) => {
+                console.error('Form submission failed:', errors);
                 setIsSubmitting(false);
+                // Show error message to user
+                if (errors && typeof errors === 'object') {
+                    const errorMessages = Object.values(errors).flat();
+                    alert('Form submission failed: ' + errorMessages.join(', '));
+                } else {
+                    alert('Form submission failed. Please try again.');
+                }
             }
         });
     }

@@ -18,9 +18,11 @@ import {
     CheckCircle, 
     XCircle, 
     PlusIcon,
-    ArrowLeftIcon
+    ArrowLeftIcon,
+    EditIcon
 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
+import { SubmissionPrompt } from '@/components/hte/submission-prompt';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -69,15 +71,20 @@ interface HTEProfileProps {
             }>;
         }>;
     };
+    showSubmissionPrompt: boolean;
     [key: string]: any;
 }
 
 export default function HTEProfilePage() {
-    const { hte } = usePage<HTEProfileProps>().props;
+    const { hte, showSubmissionPrompt } = usePage<HTEProfileProps>().props;
+    
+    // Get internship ID from URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const internshipIdFromUrl = urlParams.get('internship');
     
     // State for dropdowns
     const [selectedStatus, setSelectedStatus] = useState<string>('all');
-    const [selectedInternshipId, setSelectedInternshipId] = useState<string>('');
+    const [selectedInternshipId, setSelectedInternshipId] = useState<string>(internshipIdFromUrl || '');
     const [showConfirmDialog, setShowConfirmDialog] = useState<boolean>(false);
     const [internshipToToggle, setInternshipToToggle] = useState<number | null>(null);
     const [showSuccessMessage, setShowSuccessMessage] = useState<boolean>(false);
@@ -245,6 +252,15 @@ export default function HTEProfilePage() {
                         </Link>
                     </div>
                 </div>
+
+                {/* Submission Prompt */}
+                <SubmissionPrompt 
+                    showPrompt={showSubmissionPrompt}
+                    title="Complete Your Assessment Form"
+                    description="Please complete the assessment form first to access all features and manage your internships effectively."
+                    buttonText="Complete Form"
+                    buttonHref="/form"
+                />
 
                 <div className="grid gap-6 md:grid-cols-3">
                     {/* Main Content */}
@@ -500,12 +516,8 @@ export default function HTEProfilePage() {
                                             <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
                                                 <Link href={`/hte/edit-internship/${selectedInternship.id}`}>
                                                     <Button variant="outline" size="sm" className="gap-2">
+                                                        <EditIcon className="h-4 w-4" />
                                                         Edit Internship
-                                                    </Button>
-                                                </Link>
-                                                <Link href={`/hte/internship/${selectedInternship.id}`}>
-                                                    <Button size="sm" className="gap-2">
-                                                        View Details
                                                     </Button>
                                                 </Link>
                                                 {selectedInternship.is_active ? (

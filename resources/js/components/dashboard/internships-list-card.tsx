@@ -43,7 +43,7 @@ export function InternshipsListCard({ internships }: InternshipsListCardProps) {
                         {sortedInternships.map((internship) => (
                             <Link 
                                 key={internship.id} 
-                                href={`/hte/internship/${internship.id}`}
+                                href={`/hte/profile?internship=${internship.id}`}
                                 className="block"
                             >
                                 <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group">

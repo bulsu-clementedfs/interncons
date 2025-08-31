@@ -1,6 +1,7 @@
 import type { BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import AdminLayout from '@/layouts/admin/layout';
+import { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -20,7 +21,22 @@ interface Student {
     is_active: boolean;
 }
 
-export default function StudentList({ students }: { students: Student[] }) {
+interface UnverifiedUser {
+    id: number | string;
+    username: string;
+    email: string;
+    section: string;
+    status: string;
+    created_at: string;
+}
+
+interface Props {
+    students: Student[];
+    unverifiedUsers?: UnverifiedUser[];
+}
+
+export default function StudentList({ students, unverifiedUsers = [] }: Props) {
+    const [showUnverified, setShowUnverified] = useState(false);
     const handleEdit = (studentId: number | string) => {
         router.get(`/student/${studentId}/edit`);
     };
@@ -31,49 +47,126 @@ export default function StudentList({ students }: { students: Student[] }) {
         }
     };
 
+    const handleEditUnverified = (userId: number | string) => {
+        router.get(`/student/unverified/${userId}/edit`);
+    };
+
+    const handleArchiveUnverified = (userId: number | string) => {
+        if (confirm('Are you sure you want to archive this unverified user?')) {
+            router.patch(`/student/unverified/${userId}/archive`);
+        }
+    };
+
+    const handleShowUnverified = () => {
+        setShowUnverified(!showUnverified);
+    };
+
     return (
         <AdminLayout>
             <Head title="Student List" />
 
             <div className="space-y-6">
+                {/* Header with Show Unverified button */}
+                <div className="flex justify-between items-center">
+                    <h1 className="text-2xl font-bold text-gray-900">
+                        {showUnverified ? 'Unverified Student Accounts' : 'Verified Students'}
+                    </h1>
+                    <button
+                        onClick={handleShowUnverified}
+                        className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                            showUnverified 
+                                ? 'bg-gray-500 hover:bg-gray-600 text-white' 
+                                : 'bg-orange-500 hover:bg-orange-600 text-white'
+                        }`}
+                    >
+                        {showUnverified ? 'Show Verified Students' : 'Show Unverified'}
+                    </button>
+                </div>
+
                 <div className="overflow-auto max-h-[60vh]">
-                    <table className="w-full bg-white shadow-md">
-                        <thead className="border-b-2 border-gray-200">
-                        <tr>
-                            <th className="p-3 text-sm font-semibold tracking-wide text-left">Last Name</th>
-                            <th className="p-3 text-sm font-semibold tracking-wide text-left">First Name</th>
-                            <th className="p-3 text-sm font-semibold tracking-wide text-left">Middle Initial</th>
-                            <th className="p-3 text-sm font-semibold tracking-wide text-left">Student Number</th>
-                            <th className="p-3 text-sm font-semibold tracking-wide text-left">Section</th>
-                            <th className="p-3 text-sm font-semibold tracking-wide text-left">Specialization</th>
-                            <th className="p-3 text-sm font-semibold tracking-wide text-left">Action</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {students.map((stud) => (
-                            <tr key={stud.id} className="border-b border-gray-200 hover:bg-[#f3f3f3]">
-                                <td className="p-3 text-sm font-normal">{stud.last_name}</td>
-                                <td className="p-3 text-sm font-normal">{stud.first_name}</td>
-                                <td className="p-3 text-sm font-normal">{stud.middle_name ? stud.middle_name.charAt(0).toUpperCase() + '.' : ''}</td>
-                                <td className="p-3 text-sm font-normal">{stud.student_number}</td>
-                                <td className="p-3 text-sm font-normal">{stud.section}</td>
-                                <td className="p-3 text-sm font-normal">{stud.specialization || ''}</td>
-                                <td className="p-3 text-sm font-normal">
-                                    <button
-                                        onClick={() => handleEdit(stud.id)}
-                                        className="mr-3 text-sm bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded transition-colors">
-                                        Edit
-                                    </button>
-                                    <button
-                                        onClick={() => handleArchive(stud.id)}
-                                        className="text-sm bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded transition-colors">
-                                        Archive
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                        </tbody>
-                    </table>
+                    {showUnverified ? (
+                        // Unverified users table
+                        <table className="w-full bg-white shadow-md">
+                            <thead className="border-b-2 border-gray-200">
+                                <tr>
+                                    <th className="p-3 text-sm font-semibold tracking-wide text-left">Username</th>
+                                    <th className="p-3 text-sm font-semibold tracking-wide text-left">Email</th>
+                                    <th className="p-3 text-sm font-semibold tracking-wide text-left">Section</th>
+                                    <th className="p-3 text-sm font-semibold tracking-wide text-left">Status</th>
+                                    <th className="p-3 text-sm font-semibold tracking-wide text-left">Created At</th>
+                                    <th className="p-3 text-sm font-semibold tracking-wide text-left">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {unverifiedUsers.map((user) => (
+                                    <tr key={user.id} className="border-b border-gray-200 hover:bg-[#f3f3f3]">
+                                        <td className="p-3 text-sm font-normal">{user.username}</td>
+                                        <td className="p-3 text-sm font-normal">{user.email}</td>
+                                        <td className="p-3 text-sm font-normal">{user.section}</td>
+                                        <td className="p-3 text-sm font-normal">
+                                            <span className="px-2 py-1 text-xs rounded-full bg-orange-100 text-orange-800">
+                                                {user.status}
+                                            </span>
+                                        </td>
+                                        <td className="p-3 text-sm font-normal">
+                                            {new Date(user.created_at).toLocaleDateString()}
+                                        </td>
+                                        <td className="p-3 text-sm font-normal">
+                                            <button
+                                                onClick={() => handleEditUnverified(user.id)}
+                                                className="mr-3 text-sm bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded transition-colors">
+                                                Edit
+                                            </button>
+                                            <button
+                                                onClick={() => handleArchiveUnverified(user.id)}
+                                                className="text-sm bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded transition-colors">
+                                                Archive
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    ) : (
+                        // Verified students table
+                        <table className="w-full bg-white shadow-md">
+                            <thead className="border-b-2 border-gray-200">
+                                <tr>
+                                    <th className="p-3 text-sm font-semibold tracking-wide text-left">Last Name</th>
+                                    <th className="p-3 text-sm font-semibold tracking-wide text-left">First Name</th>
+                                    <th className="p-3 text-sm font-semibold tracking-wide text-left">Middle Initial</th>
+                                    <th className="p-3 text-sm font-semibold tracking-wide text-left">Student Number</th>
+                                    <th className="p-3 text-sm font-semibold tracking-wide text-left">Section</th>
+                                    <th className="p-3 text-sm font-semibold tracking-wide text-left">Specialization</th>
+                                    <th className="p-3 text-sm font-semibold tracking-wide text-left">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {students.map((stud) => (
+                                    <tr key={stud.id} className="border-b border-gray-200 hover:bg-[#f3f3f3]">
+                                        <td className="p-3 text-sm font-normal">{stud.last_name}</td>
+                                        <td className="p-3 text-sm font-normal">{stud.first_name}</td>
+                                        <td className="p-3 text-sm font-normal">{stud.middle_name ? stud.middle_name.charAt(0).toUpperCase() + '.' : ''}</td>
+                                        <td className="p-3 text-sm font-normal">{stud.student_number}</td>
+                                        <td className="p-3 text-sm font-normal">{stud.section}</td>
+                                        <td className="p-3 text-sm font-normal">{stud.specialization || ''}</td>
+                                        <td className="p-3 text-sm font-normal">
+                                            <button
+                                                onClick={() => handleEdit(stud.id)}
+                                                className="mr-3 text-sm bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded transition-colors">
+                                                Edit
+                                            </button>
+                                            <button
+                                                onClick={() => handleArchive(stud.id)}
+                                                className="text-sm bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded transition-colors">
+                                                Archive
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
                 </div>
             </div>
         </AdminLayout>

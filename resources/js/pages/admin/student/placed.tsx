@@ -1,16 +1,22 @@
 import type { BreadcrumbItem } from '@/types';
-import AppLayout from '@/layouts/app-layout';
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
+import { useState, useEffect } from 'react';
 import AdminLayout from '@/layouts/admin/layout';
 import Heading from '@/components/heading';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
     UserIcon, 
     Building2Icon, 
     CheckCircleIcon,
     XCircleIcon,
-    ClockIcon
+    ClockIcon,
+    SearchIcon,
+    FilterIcon
 } from 'lucide-react';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -41,16 +47,82 @@ interface PlacedStudent {
     };
     status: 'pending' | 'approved' | 'rejected';
     compatibility_score: number;
-    admin_notes?: string;
     placement_date?: string;
     created_at: string;
 }
 
-interface Props {
-    placedStudents: PlacedStudent[];
+interface SectionOption {
+    name: string;
+    total_placements: number;
 }
 
-export default function StudentPlaced({ placedStudents = [] }: Props) {
+interface InternshipOption {
+    id: number;
+    title: string;
+    company: string;
+    department: string;
+    total_placements: number;
+}
+
+interface Filters {
+    sections: SectionOption[];
+    internships: InternshipOption[];
+    currentSection: string | null;
+    currentInternship: string | null;
+    currentSearch: string | null;
+}
+
+interface Props {
+    placedStudents: PlacedStudent[];
+    filters: Filters;
+}
+
+export default function StudentPlaced({ placedStudents = [], filters }: Props) {
+    const [localFilters, setLocalFilters] = useState({
+        section: filters.currentSection || 'all',
+        internship: filters.currentInternship || 'all',
+        search: filters.currentSearch || '',
+    });
+
+    // Update local filters when props change
+    useEffect(() => {
+        setLocalFilters({
+            section: filters.currentSection || 'all',
+            internship: filters.currentInternship || 'all',
+            search: filters.currentSearch || ''
+        });
+    }, [filters]);
+
+    const handleFilterChange = (filterType: 'section' | 'internship' | 'search', value: string) => {
+        const newFilters = { ...localFilters, [filterType]: value };
+        setLocalFilters(newFilters);
+
+        // Apply filters immediately
+        const params = new URLSearchParams();
+        if (newFilters.section && newFilters.section !== 'all') {
+            params.append('section', newFilters.section);
+        }
+        if (newFilters.internship && newFilters.internship !== 'all') {
+            params.append('internship', newFilters.internship);
+        }
+        if (newFilters.search) {
+            params.append('search', newFilters.search);
+        }
+
+        router.get('/student/placed', params.toString() ? Object.fromEntries(params) : {}, {
+            preserveState: true,
+            replace: true
+        });
+    };
+
+    const clearFilters = () => {
+        setLocalFilters({ section: 'all', internship: 'all', search: '' });
+        router.get('/student/placed', {}, {
+            preserveState: true,
+            replace: true
+        });
+    };
+
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'approved':
@@ -76,17 +148,111 @@ export default function StudentPlaced({ placedStudents = [] }: Props) {
     };
 
     return (
-        <AppLayout breadcrumbs={breadcrumbs}>
+        <AdminLayout>
             <Head title="Placed Students" />
+            
+            <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                    <Heading 
+                        title="Placed Students" 
+                        description="View and manage student internship placements."
+                    />
+                </div>
 
-            <AdminLayout>
-                <div className="space-y-6">
-                    <div className="flex justify-between items-center">
-                        <Heading 
-                            title="Placed Students" 
-                            description="View and manage student internship placements."
-                        />
-                    </div>
+                {/* Filters Section */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <FilterIcon className="h-5 w-5" />
+                            Filters & Search
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            {/* Section Filter */}
+                            <div className="space-y-2">
+                                <Label htmlFor="section-filter">Section</Label>
+                                <Select 
+                                    value={localFilters.section} 
+                                    onValueChange={(value) => handleFilterChange('section', value)}
+                                >
+                                    <SelectTrigger id="section-filter">
+                                        <SelectValue placeholder="Select section" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Sections</SelectItem>
+                                        {filters.sections && Array.isArray(filters.sections) && filters.sections.map((section) => (
+                                            <SelectItem key={section.name} value={section.name}>
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium">{section.name}</span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {section.total_placements} placement{section.total_placements !== 1 ? 's' : ''}
+                                                    </span>
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {/* Internship Filter */}
+                            <div className="space-y-2">
+                                <Label htmlFor="internship-filter">Internship</Label>
+                                <Select 
+                                    value={localFilters.internship} 
+                                    onValueChange={(value) => handleFilterChange('internship', value)}
+                                >
+                                    <SelectTrigger id="internship-filter">
+                                        <SelectValue placeholder="Select internship" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Internships</SelectItem>
+                                        {filters.internships && Array.isArray(filters.internships) && filters.internships.map((internship) => (
+                                            <SelectItem key={internship.id} value={internship.id.toString()}>
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium">{internship.title}</span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {internship.company} • {internship.department}
+                                                    </span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {internship.total_placements} placement{internship.total_placements !== 1 ? 's' : ''}
+                                                    </span>
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {/* Search */}
+                            <div className="space-y-2">
+                                <Label htmlFor="search">Search</Label>
+                                <div className="relative">
+                                    <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                        id="search"
+                                        placeholder="Search students..."
+                                        value={localFilters.search}
+                                        onChange={(e) => handleFilterChange('search', e.target.value)}
+                                        className="pl-10"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Clear Filters */}
+                            <div className="space-y-2">
+                                <Label>&nbsp;</Label>
+                                <Button 
+                                    variant="outline" 
+                                    onClick={clearFilters}
+                                    className="w-full"
+                                >
+                                    Clear Filters
+                                </Button>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
 
                     {/* Summary Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -149,7 +315,10 @@ export default function StudentPlaced({ placedStudents = [] }: Props) {
                                     </div>
                                     <h3 className="text-lg font-medium text-gray-900 mb-2">No Placements Found</h3>
                                     <p className="text-gray-500">
-                                        Students need to be placed through the matching process.
+                                        {localFilters.section !== 'all' || localFilters.internship !== 'all' || localFilters.search
+                                            ? 'Try adjusting your filters or search criteria.'
+                                            : 'Students need to be placed through the matching process.'
+                                        }
                                     </p>
                                 </div>
                             ) : (
@@ -233,7 +402,6 @@ export default function StudentPlaced({ placedStudents = [] }: Props) {
                         </CardContent>
                     </Card>
                 </div>
-            </AdminLayout>
-        </AppLayout>
+        </AdminLayout>
     );
 }

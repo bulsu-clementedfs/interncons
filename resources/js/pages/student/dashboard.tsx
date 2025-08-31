@@ -151,12 +151,20 @@ export default function StudentDashboard({
                             Student Number: {student.student_number} • Section: {student.section || 'Not specified'}
                         </p>
                     </div>
-                    <Button asChild variant="outline">
-                        <Link href="/student-profile">
-                            <User className="h-4 w-4 mr-2" />
-                            View Profile
-                        </Link>
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button asChild variant="outline">
+                            <Link href="/matched">
+                                <Target className="h-4 w-4 mr-2" />
+                                View Matches
+                            </Link>
+                        </Button>
+                        <Button asChild variant="outline">
+                            <Link href="/student-profile">
+                                <User className="h-4 w-4 mr-2" />
+                                View Profile
+                            </Link>
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Performance Overview */}

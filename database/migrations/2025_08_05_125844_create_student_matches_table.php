@@ -19,6 +19,7 @@ return new class extends Migration
             $table->foreignIdFor(Internship::class)->constrained()->cascadeOnDelete();
             $table->unsignedInteger('rank');
             $table->decimal('compatibility_score', 5, 2);
+            $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending');
             $table->timestamps();
         });
     }

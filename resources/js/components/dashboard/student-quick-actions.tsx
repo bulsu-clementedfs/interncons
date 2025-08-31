@@ -131,17 +131,30 @@ export function StudentQuickActions({
                     </Button>
 
                     {hasSubmitted && (
-                        <Button asChild variant="outline" className="w-full justify-start h-auto p-3">
-                            <Link href="/assessment">
-                                <TrendingUp className="h-4 w-4 mr-3" />
-                                <div className="text-left">
-                                    <div className="font-medium">View Opportunities</div>
-                                    <div className="text-xs text-muted-foreground">
-                                        Browse available internships
+                        <>
+                            <Button asChild variant="outline" className="w-full justify-start h-auto p-3">
+                                <Link href="/matched">
+                                    <Target className="h-4 w-4 mr-3" />
+                                    <div className="text-left">
+                                        <div className="font-medium">View Matches</div>
+                                        <div className="text-xs text-muted-foreground">
+                                            See your compatibility scores
+                                        </div>
                                     </div>
-                                </div>
-                            </Link>
-                        </Button>
+                                </Link>
+                            </Button>
+                            <Button asChild variant="outline" className="w-full justify-start h-auto p-3">
+                                <Link href="/assessment">
+                                    <TrendingUp className="h-4 w-4 mr-3" />
+                                    <div className="text-left">
+                                        <div className="font-medium">View Opportunities</div>
+                                        <div className="text-xs text-muted-foreground">
+                                            Browse available internships
+                                        </div>
+                                    </div>
+                                </Link>
+                            </Button>
+                        </>
                     )}
 
                     <Button asChild variant="outline" className="w-full justify-start h-auto p-3">

@@ -66,7 +66,38 @@ export interface question {
     placeholder?: string;
     options?: string[];
     required?: boolean;
-    access: 'student' | 'hte';
+    access: 'Student' | 'HTE';
+}
+
+export interface Question {
+    id: number;
+    question: string;
+    access: 'Student' | 'HTE';
+    is_active: boolean;
+    subcategory_id: number;
+    subcategory: {
+        id: number;
+        subcategory_name: string;
+        category: {
+            id: number;
+            category_name: string;
+        };
+    };
+    created_at: string;
+    updated_at: string;
+}
+
+export interface Category {
+    id: number;
+    category_name: string;
+    subCategories: SubCategory[];
+}
+
+export interface SubCategory {
+    id: number;
+    subcategory_name: string;
+    category_id: number;
+    category_name?: string;
 }
 
 export interface subcategory {

@@ -9,10 +9,12 @@ use App\Models\Internship;
 use App\Models\StudentScore;
 use App\Models\SubcategoryWeight;
 use App\Models\StudentPlacement;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 use App\Services\MatchingService;
 
 class StudentController extends Controller
@@ -52,7 +54,61 @@ class StudentController extends Controller
             ];
         });
 
-        return Inertia::render('admin/student/list', ['students' => $transformedStudents]);
+        // Get unverified users for the Show Unverified functionality
+        $unverifiedUsers = User::with(['academeAccounts.section'])
+            ->where('status', 'unverified')
+            ->whereHas('roles', function($query) {
+                $query->where('name', 'student');
+            })
+            ->orderBy('username')
+            ->get();
+
+        // Transform unverified users data
+        $transformedUnverifiedUsers = $unverifiedUsers->map(function ($user) {
+            $academeAccount = $user->academeAccounts()->first();
+            return [
+                'id' => $user->id,
+                'username' => $user->username,
+                'email' => $user->email,
+                'section' => $academeAccount ? $academeAccount->section->section_name ?? 'No Section' : 'No Section',
+                'status' => $user->status,
+                'created_at' => $user->created_at,
+            ];
+        });
+
+        return Inertia::render('admin/student/list', [
+            'students' => $transformedStudents,
+            'unverifiedUsers' => $transformedUnverifiedUsers
+        ]);
+    }
+
+    /**
+     * Display unverified student accounts
+     */
+    public function unverified()
+    {
+        $unverifiedUsers = User::with(['academeAccounts.section'])
+            ->where('status', 'unverified')
+            ->whereHas('roles', function($query) {
+                $query->where('name', 'student');
+            })
+            ->orderBy('username')
+            ->get();
+
+        // Transform the data for frontend
+        $transformedUnverifiedUsers = $unverifiedUsers->map(function ($user) {
+            $academeAccount = $user->academeAccounts()->first();
+            return [
+                'id' => $user->id,
+                'username' => $user->username,
+                'email' => $user->email,
+                'section' => $academeAccount ? $academeAccount->section->section_name ?? 'No Section' : 'No Section',
+                'status' => $user->status,
+                'created_at' => $user->created_at,
+            ];
+        });
+
+        return Inertia::render('admin/student/unverified', ['unverifiedUsers' => $transformedUnverifiedUsers]);
     }
 
     /**
@@ -84,7 +140,17 @@ class StudentController extends Controller
      */
     public function edit(Student $student)
     {
+        // Add debugging
+        Log::info('Edit method called for student ID: ' . $student->id);
+        Log::info('Current user: ' . Auth::user()->email ?? 'No user');
+        Log::info('User roles: ' . Auth::user()->getRoleNames()->implode(', ') ?? 'No roles');
+        
         $student->load('section');
+        
+        // Get all available sections for the dropdown
+        $sections = \App\Models\Section::where('status', 'active')
+            ->orderBy('section_name')
+            ->get(['section_id', 'section_name']);
         
         $formattedStudent = [
             'id' => $student->id,
@@ -92,11 +158,15 @@ class StudentController extends Controller
             'first_name' => $student->first_name,
             'middle_name' => $student->middle_name,
             'last_name' => $student->last_name,
+            'section_id' => $student->section_id,
             'section' => $student->section->section_name ?? '',
             'specialization' => $student->specialization,
         ];
         
-        return Inertia::render('admin/student/edit', ['student' => $formattedStudent]);
+        return Inertia::render('admin/student/edit', [
+            'student' => $formattedStudent,
+            'sections' => $sections
+        ]);
     }
 
     /**
@@ -104,14 +174,20 @@ class StudentController extends Controller
      */
     public function update(Request $request, Student $student)
     {
+        // Add debugging
+        Log::info('Update method called for student ID: ' . $student->id);
+        Log::info('Request data: ' . json_encode($request->all()));
+        
         $validated = $request->validate([
             'first_name' => 'required|string|max:50',
             'middle_name' => 'nullable|string|max:50',
             'last_name' => 'required|string|max:50',
             'student_number' => 'required|string|max:20',
             'section_id' => 'required|integer|exists:sections,section_id',
-            'specialization' => 'required|string|max:10',
+            'specialization' => 'required|string|max:100',
         ]);
+
+        Log::info('Validated data: ' . json_encode($validated));
 
         $student->update($validated);
 
@@ -126,6 +202,70 @@ class StudentController extends Controller
         $student->update(['is_active' => false]);
         
         return redirect()->route('student-list')->with('success', 'Student archived successfully');
+    }
+
+    /**
+     * Edit unverified user account
+     */
+    public function editUnverifiedUser(User $user)
+    {
+        $user->load(['academeAccounts.section']);
+        $academeAccount = $user->academeAccounts()->first();
+        
+        // Get all available sections for the dropdown
+        $sections = \App\Models\Section::where('status', 'active')
+            ->orderBy('section_name')
+            ->get(['section_id', 'section_name']);
+        
+        $formattedUser = [
+            'id' => $user->id,
+            'username' => $user->username,
+            'email' => $user->email,
+            'status' => $user->status,
+            'section_id' => $academeAccount ? $academeAccount->section_id : null,
+            'section' => $academeAccount ? $academeAccount->section->section_name ?? '' : '',
+            'created_at' => $user->created_at,
+        ];
+        
+        return Inertia::render('admin/student/edit-unverified', [
+            'user' => $formattedUser,
+            'sections' => $sections
+        ]);
+    }
+
+    /**
+     * Update unverified user account
+     */
+    public function updateUnverifiedUser(Request $request, User $user)
+    {
+        $validated = $request->validate([
+            'username' => 'required|string|max:50|unique:users,username,' . $user->id,
+            'email' => 'required|email|max:100|unique:users,email,' . $user->id,
+            'section_id' => 'required|integer|exists:sections,section_id',
+        ]);
+
+        $user->update([
+            'username' => $validated['username'],
+            'email' => $validated['email'],
+        ]);
+
+        // Update academe account section
+        $academeAccount = $user->academeAccounts()->first();
+        if ($academeAccount) {
+            $academeAccount->update(['section_id' => $validated['section_id']]);
+        }
+
+        return redirect()->route('student-unverified')->with('success', 'Unverified user updated successfully');
+    }
+
+    /**
+     * Archive unverified user account
+     */
+    public function archiveUnverifiedUser(User $user)
+    {
+        $user->update(['status' => 'archived']);
+        
+        return redirect()->route('student-unverified')->with('success', 'Unverified user archived successfully');
     }
 
     /**
@@ -145,10 +285,11 @@ class StudentController extends Controller
         $internshipFilter = $request->get('internship');
         $searchQuery = $request->get('search');
 
-        // Get students who have submitted assessments
+        // Get students who have submitted assessments and are not yet placed
         $query = Student::with(['user', 'scores.subcategory', 'section'])
             ->where('is_submit', true)
-            ->where('is_active', true);
+            ->where('is_active', true)
+            ->where('is_placed', false); // Exclude students who are already placed
 
         // Apply section filter
         if ($sectionFilter && $sectionFilter !== 'all') {
@@ -186,16 +327,26 @@ class StudentController extends Controller
                         'section' => $student->section->section_name ?? '',
                         'specialization' => $student->specialization,
                         'best_match' => [
-                            'internship' => $specificMatch->internship,
+                            'internship' => [
+                                'id' => $specificMatch->internship->id,
+                                'position_title' => $specificMatch->internship->position_title,
+                                'department' => $specificMatch->internship->department,
+                                'slot_count' => $specificMatch->internship->slot_count,
+                                'hte' => [
+                                    'company_name' => $specificMatch->internship->hte->company_name ?? 'Unknown Company'
+                                ]
+                            ],
                             'compatibility_score' => $specificMatch->compatibility_score,
+                            'status' => $specificMatch->status, // Include status for frontend display
                         ],
                         'has_matches' => true,
                     ];
                 }
             } else {
-                // Get the best match from stored compatibility scores
+                // Get the best match from stored compatibility scores with pending status
                 $bestMatch = $student->compatibilityScores()
                     ->with(['internship.hte:id,company_name', 'internship.subcategoryWeights.subcategory'])
+                    ->where('status', 'pending') // Only show pending matches for "all internships" filter
                     ->orderBy('compatibility_score', 'desc')
                     ->first();
 
@@ -209,8 +360,19 @@ class StudentController extends Controller
                         'section' => $student->section->section_name ?? '',
                         'specialization' => $student->specialization,
                         'best_match' => [
-                            'internship' => $bestMatch->internship,
+                            'internship' => [
+                                'id' => $bestMatch->internship->id,
+                                'position_title' => $bestMatch->internship->position_title,
+                                'department' => $bestMatch->internship->department,
+                                'slot_count' => $bestMatch->internship->slot_count,
+                                'available_slots' => $bestMatch->internship->slot_count - $bestMatch->internship->studentPlacements()->where('status', 'approved')->count(),
+                                'occupied_slots' => $bestMatch->internship->studentPlacements()->where('status', 'approved')->count(),
+                                'hte' => [
+                                    'company_name' => $bestMatch->internship->hte->company_name ?? 'Unknown Company'
+                                ]
+                            ],
                             'compatibility_score' => $bestMatch->compatibility_score,
+                            'status' => $bestMatch->status, // Include status for frontend display
                         ],
                         'has_matches' => true,
                     ];
@@ -247,26 +409,52 @@ class StudentController extends Controller
             })->values();
         }
 
-        // Get available sections and internships for filters
+        // Get available sections with placement counts
         $availableSections = Student::with('section')
             ->where('is_submit', true)
             ->where('is_active', true)
             ->get()
-            ->pluck('section.section_name')
+            ->groupBy('section.section_name')
+            ->map(function ($sectionStudents, $sectionName) {
+                if (!$sectionName) return null;
+                
+                $totalStudents = $sectionStudents->count();
+                $placedStudents = $sectionStudents->filter(function ($student) {
+                    return $student->is_placed || $student->placements()->where('status', 'approved')->exists();
+                })->count();
+                
+                return [
+                    'name' => $sectionName,
+                    'total_students' => $totalStudents,
+                    'placed_students' => $placedStudents,
+                    'placement_rate' => $totalStudents > 0 ? round(($placedStudents / $totalStudents) * 100, 1) : 0
+                ];
+            })
             ->filter()
-            ->unique()
             ->values();
 
+        // Get available internships with slot occupancy information
         $availableInternships = Internship::where('is_active', true)
             ->where('slot_count', '>', 0)
-            ->with('hte:id,company_name')
+            ->with(['hte:id,company_name', 'studentPlacements'])
             ->get()
             ->map(function ($internship) {
+                $occupiedSlots = $internship->studentPlacements()
+                    ->where('status', 'approved')
+                    ->count();
+                
+                $availableSlots = $internship->slot_count - $occupiedSlots;
+                $occupancyRate = $internship->slot_count > 0 ? round(($occupiedSlots / $internship->slot_count) * 100, 1) : 0;
+                
                 return [
                     'id' => $internship->id,
                     'title' => $internship->position_title,
                     'company' => $internship->hte->company_name,
                     'department' => $internship->department,
+                    'total_slots' => $internship->slot_count,
+                    'occupied_slots' => $occupiedSlots,
+                    'available_slots' => $availableSlots,
+                    'occupancy_rate' => $occupancyRate
                 ];
             });
 
@@ -419,6 +607,8 @@ class StudentController extends Controller
         ]);
     }
 
+    // Note: Removed checkInefficientSlots method as it was preventing valid placements
+
     /**
      * Approve student placement
      */
@@ -428,31 +618,41 @@ class StudentController extends Controller
         Log::info('Placement approval request received', [
             'student_id' => $student->id,
             'request_data' => $request->all(),
-            'headers' => $request->headers->all()
+            'headers' => $request->headers->all(),
+            'method' => $request->method(),
+            'url' => $request->url(),
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'user_id' => Auth::id() ?? 'not_authenticated',
+            'user_email' => Auth::user()?->email ?? 'unknown'
         ]);
 
         // Log the raw request data for debugging
         Log::info('Raw request data:', [
             'has_admin_notes' => $request->has('admin_notes'),
             'admin_notes_value' => $request->input('admin_notes'),
-            'all_inputs' => $request->all()
+            'all_inputs' => $request->all(),
+            'content_type' => $request->header('Content-Type'),
+            'csrf_token' => $request->header('X-CSRF-TOKEN')
         ]);
+
+        // Check if request is JSON
+        if ($request->isJson()) {
+            Log::info('Request is JSON format');
+            $jsonData = $request->json()->all();
+            Log::info('JSON data:', $jsonData);
+        } else {
+            Log::info('Request is not JSON format');
+        }
 
         $validated = $request->validate([
             'internship_id' => 'required|exists:internships,id',
             'compatibility_score' => 'required|numeric|min:0|max:100',
-            'admin_notes' => 'nullable|string|max:500',
         ]);
-
-        // Ensure admin_notes is always set, even if null or empty
-        if (!isset($validated['admin_notes']) || $validated['admin_notes'] === '') {
-            $validated['admin_notes'] = null;
-        }
 
         // Log validated data for debugging
         Log::info('Validated data:', [
-            'validated' => $validated,
-            'admin_notes_final' => $validated['admin_notes']
+            'validated' => $validated
         ]);
 
         // Check if student already has a placement
@@ -471,10 +671,32 @@ class StudentController extends Controller
             ], 404);
         }
 
-        if ($internship->slot_count <= 0) {
+        // Note: Removed inefficient slots check as it was preventing valid placements
+        // The slot availability check below handles this properly
+
+        // Check if internship still has available slots
+        $currentApprovedPlacements = $internship->studentPlacements()
+            ->where('status', 'approved')
+            ->count();
+        
+        // Calculate available slots: total slots minus currently approved placements
+        $availableSlots = $internship->slot_count - $currentApprovedPlacements;
+        
+        // Debug logging for slot calculation
+        Log::info('Single placement slot availability check', [
+            'internship_id' => $internship->id,
+            'position_title' => $internship->position_title,
+            'slot_count' => $internship->slot_count,
+            'current_approved_placements' => $currentApprovedPlacements,
+            'available_slots' => $availableSlots,
+            'student_id' => $student->id,
+            'student_name' => "{$student->first_name} {$student->last_name}"
+        ]);
+        
+        if ($availableSlots <= 0) {
             return response()->json([
-                'message' => 'No available slots for this internship'
-            ], 400);
+                'message' => "No available slots for this internship. Only {$internship->slot_count} total slots, {$currentApprovedPlacements} already occupied."
+            ], 422);
         }
 
         try {
@@ -485,7 +707,6 @@ class StudentController extends Controller
                 'internship_id' => $validated['internship_id'],
                 'status' => 'approved',
                 'compatibility_score' => $validated['compatibility_score'],
-                'admin_notes' => $validated['admin_notes'],
                 'placement_date' => now(),
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -536,9 +757,20 @@ class StudentController extends Controller
             }
             Log::info('Student status updated');
 
-            // Decrease internship slot count
-            $internship->decrement('slot_count');
-            Log::info('Internship slot count decreased', ['new_count' => $internship->slot_count]);
+            // Update the corresponding student_match record status to 'approved'
+            $studentMatchUpdated = StudentMatch::where('student_id', $student->id)
+                ->where('internship_id', $validated['internship_id'])
+                ->update(['status' => 'approved']);
+            
+            if ($studentMatchUpdated) {
+                Log::info('Student match status updated to approved');
+            } else {
+                Log::warning('Student match status update failed or no matching record found');
+            }
+
+            // Note: slot_count is not decremented as it represents total available slots
+            // Available slots are calculated dynamically as slot_count - current_approved_placements
+            Log::info('Placement approved successfully', ['available_slots_remaining' => $internship->slot_count - ($currentApprovedPlacements + 1)]);
 
         } catch (\Illuminate\Database\QueryException $e) {
             Log::error('Database error in placement approval', [
@@ -580,7 +812,6 @@ class StudentController extends Controller
                 'internship_id' => $placement->internship_id,
                 'status' => $placement->status,
                 'compatibility_score' => $placement->compatibility_score,
-                'admin_notes' => $placement->admin_notes,
                 'placement_date' => $placement->placement_date,
                 'created_at' => $placement->created_at,
             ]
@@ -595,15 +826,7 @@ class StudentController extends Controller
         $validated = $request->validate([
             'internship_id' => 'required|exists:internships,id',
             'compatibility_score' => 'required|numeric|min:0|max:100',
-            'admin_notes' => 'required|string|max:500',
         ]);
-
-        // Ensure admin_notes is always set for rejection
-        if (!isset($validated['admin_notes']) || empty($validated['admin_notes'])) {
-            return response()->json([
-                'message' => 'Admin notes are required for rejection'
-            ], 400);
-        }
 
         // Check if student already has a placement
         $existingPlacement = StudentPlacement::where('student_id', $student->id)->first();
@@ -614,33 +837,27 @@ class StudentController extends Controller
         }
 
         try {
-            // Create placement record using DB::table instead of Eloquent create()
-            // This works better with composite primary keys
-            $placementData = [
-                'student_id' => $student->id,
-                'internship_id' => $validated['internship_id'],
-                'status' => 'rejected',
-                'compatibility_score' => $validated['compatibility_score'],
-                'admin_notes' => $validated['admin_notes'] ?? null,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
+            // Only update the corresponding student_match record status to 'rejected'
+            // Do NOT create a placement record for rejected matches
+            $studentMatchUpdated = StudentMatch::where('student_id', $student->id)
+                ->where('internship_id', $validated['internship_id'])
+                ->update(['status' => 'rejected']);
             
-            Log::info('Attempting to create rejected placement with data:', $placementData);
+            if ($studentMatchUpdated) {
+                Log::info('Student match status updated to rejected');
+                
+                return response()->json([
+                    'message' => 'Student placement rejected successfully',
+                    'match_updated' => true
+                ]);
+            } else {
+                Log::warning('Student match status update failed or no matching record found');
+                
+                return response()->json([
+                    'message' => 'No matching record found to reject'
+                ], 404);
+            }
             
-            DB::table('student_placements')->insert($placementData);
-            
-            Log::info('Rejected placement record inserted successfully');
-            
-            // Get the created placement for response
-            $placement = StudentPlacement::where('student_id', $student->id)
-                                ->where('internship_id', $validated['internship_id'])
-                                ->first();
-
-            return response()->json([
-                'message' => 'Student placement rejected',
-                'placement' => $placement
-            ]);
         } catch (\Exception $e) {
             Log::error('Error in placement rejection', [
                 'error' => $e->getMessage(),
@@ -650,8 +867,257 @@ class StudentController extends Controller
             ]);
             
             return response()->json([
-                'message' => 'Error creating placement: ' . $e->getMessage()
+                'message' => 'Error rejecting placement: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+
+
+    /**
+     * Get placed students with filtering options
+     */
+    public function getPlacedStudents(Request $request)
+    {
+        $sectionFilter = $request->get('section');
+        $internshipFilter = $request->get('internship');
+        $searchQuery = $request->get('search');
+
+        // Base query for placed students
+        $query = StudentPlacement::with(['student.section', 'internship.hte'])
+            ->where('status', 'approved'); // Only show approved placements
+
+        // Apply section filter
+        if ($sectionFilter && $sectionFilter !== 'all') {
+            $query->whereHas('student.section', function($q) use ($sectionFilter) {
+                $q->where('section_name', $sectionFilter);
+            });
+        }
+
+        // Apply internship filter
+        if ($internshipFilter && $internshipFilter !== 'all') {
+            $query->where('internship_id', $internshipFilter);
+        }
+
+        // Apply search filter
+        if ($searchQuery) {
+            $query->whereHas('student', function ($q) use ($searchQuery) {
+                $q->where('first_name', 'like', "%{$searchQuery}%")
+                  ->orWhere('last_name', 'like', "%{$searchQuery}%")
+                  ->orWhere('student_number', 'like', "%{$searchQuery}%");
+            });
+        }
+
+        $placedStudents = $query->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($placement) {
+                return [
+                    'id' => $placement->id,
+                    'student' => [
+                        'id' => $placement->student->id,
+                        'student_number' => $placement->student->student_number,
+                        'first_name' => $placement->student->first_name,
+                        'last_name' => $placement->student->last_name,
+                        'middle_name' => $placement->student->middle_name,
+                        'section' => $placement->student->section->section_name ?? '',
+                        'specialization' => $placement->student->specialization,
+                    ],
+                    'internship' => [
+                        'id' => $placement->internship->id,
+                        'position_title' => $placement->internship->position_title,
+                        'department' => $placement->internship->department,
+                        'hte' => [
+                            'company_name' => $placement->internship->hte->company_name,
+                        ],
+                    ],
+                    'status' => $placement->status,
+                    'compatibility_score' => $placement->compatibility_score,
+                    'placement_date' => $placement->placement_date,
+                    'created_at' => $placement->created_at,
+                ];
+            });
+
+        // Get available sections with placement counts
+        $availableSections = StudentPlacement::with(['student.section'])
+            ->where('status', 'approved')
+            ->get()
+            ->groupBy('student.section.section_name')
+            ->map(function ($sectionPlacements, $sectionName) {
+                if (!$sectionName) return null;
+                
+                $totalPlacements = $sectionPlacements->count();
+                
+                return [
+                    'name' => $sectionName,
+                    'total_placements' => $totalPlacements,
+                ];
+            })
+            ->filter()
+            ->values();
+
+        // Get available internships with placement counts
+        $availableInternships = StudentPlacement::with(['internship.hte'])
+            ->where('status', 'approved')
+            ->get()
+            ->groupBy('internship.id')
+            ->map(function ($internshipPlacements, $internshipId) {
+                $firstPlacement = $internshipPlacements->first();
+                if (!$firstPlacement) return null;
+                
+                $totalPlacements = $internshipPlacements->count();
+                
+                return [
+                    'id' => $firstPlacement->internship->id,
+                    'title' => $firstPlacement->internship->position_title,
+                    'company' => $firstPlacement->internship->hte->company_name,
+                    'department' => $firstPlacement->internship->department,
+                    'total_placements' => $totalPlacements,
+                ];
+            })
+            ->filter()
+            ->values();
+
+        return Inertia::render('admin/student/placed', [
+            'placedStudents' => $placedStudents,
+            'filters' => [
+                'sections' => $availableSections,
+                'internships' => $availableInternships,
+                'currentSection' => $sectionFilter,
+                'currentInternship' => $internshipFilter,
+                'currentSearch' => $searchQuery,
+            ]
+        ]);
+    }
+
+    /**
+     * Approve multiple student placements with efficiency checks
+     */
+    public function approveBatchPlacements(Request $request)
+    {
+        $validated = $request->validate([
+            'student_ids' => 'required|array',
+            'student_ids.*' => 'exists:students,id'
+        ]);
+
+        $studentIds = $validated['student_ids'];
+        
+        // Note: Removed inefficient slots check as it was preventing valid placements
+        // The individual slot availability checks below handle this properly
+        
+        // Check if all students can be placed (no conflicts)
+        $errors = [];
+        $successfulPlacements = [];
+        
+        foreach ($studentIds as $studentId) {
+            $student = Student::find($studentId);
+            if (!$student) {
+                $errors[] = "Student ID {$studentId} not found";
+                continue;
+            }
+            
+            // Check if student already has a placement
+            $existingPlacement = StudentPlacement::where('student_id', $student->id)->first();
+            if ($existingPlacement) {
+                $errors[] = "Student {$student->first_name} {$student->last_name} already has a placement";
+                continue;
+            }
+            
+            // Get student's best match internship
+            $bestMatch = StudentMatch::where('student_id', $student->id)
+                ->orderBy('compatibility_score', 'desc')
+                ->first();
+            
+            if (!$bestMatch) {
+                $errors[] = "Student {$student->first_name} {$student->last_name} has no internship matches";
+                continue;
+            }
+            
+            $internship = Internship::find($bestMatch->internship_id);
+            if (!$internship) {
+                $errors[] = "Internship not found for student {$student->first_name} {$student->last_name}";
+                continue;
+            }
+            
+            // Check if internship has available slots
+            $currentApprovedPlacements = $internship->studentPlacements()
+                ->where('status', 'approved')
+                ->count();
+            
+            // Calculate available slots: total slots minus currently approved placements
+            $availableSlots = $internship->slot_count - $currentApprovedPlacements;
+            
+            // Debug logging for slot calculation
+            Log::info('Slot availability check', [
+                'internship_id' => $internship->id,
+                'position_title' => $internship->position_title,
+                'slot_count' => $internship->slot_count,
+                'current_approved_placements' => $currentApprovedPlacements,
+                'available_slots' => $availableSlots,
+                'student_id' => $student->id,
+                'student_name' => "{$student->first_name} {$student->last_name}"
+            ]);
+            
+            if ($availableSlots <= 0) {
+                $errors[] = "No available slots for {$internship->position_title} (student: {$student->first_name} {$student->last_name}). Only {$internship->slot_count} total slots, {$currentApprovedPlacements} already occupied.";
+                continue;
+            }
+            
+            try {
+                // Create placement record
+                $placementData = [
+                    'student_id' => $student->id,
+                    'internship_id' => $internship->id,
+                    'status' => 'approved',
+                    'compatibility_score' => $bestMatch->compatibility_score,
+                    'placement_date' => now(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+                
+                DB::table('student_placements')->insert($placementData);
+                
+                // Update student status
+                $student->update(['is_placed' => true]);
+                
+                // Update the corresponding student_match record status to 'approved'
+                StudentMatch::where('student_id', $student->id)
+                    ->where('internship_id', $internship->id)
+                    ->update(['status' => 'approved']);
+                
+                // Note: slot_count is not decremented as it represents total available slots
+                // Available slots are calculated dynamically as slot_count - current_approved_placements
+                
+                $successfulPlacements[] = [
+                    'student_id' => $student->id,
+                    'student_name' => "{$student->first_name} {$student->last_name}",
+                    'internship_title' => $internship->position_title,
+                    'compatibility_score' => $bestMatch->compatibility_score
+                ];
+                
+            } catch (\Exception $e) {
+                $errors[] = "Error placing student {$student->first_name} {$student->last_name}: " . $e->getMessage();
+            }
+        }
+        
+        if (empty($successfulPlacements)) {
+            return response()->json([
+                'message' => 'No placements were approved due to errors: ' . implode(', ', $errors),
+                'type' => 'all_failed'
+            ], 400);
+        }
+        
+        $responseMessage = "Successfully approved " . count($successfulPlacements) . " placement(s).";
+        if (!empty($errors)) {
+            $responseMessage .= " Errors: " . implode(', ', $errors);
+        }
+        
+        return response()->json([
+            'message' => $responseMessage,
+            'successful_placements' => $successfulPlacements,
+            'errors' => $errors,
+            'total_requested' => count($studentIds),
+            'total_approved' => count($successfulPlacements),
+            'total_errors' => count($errors)
+        ]);
     }
 }

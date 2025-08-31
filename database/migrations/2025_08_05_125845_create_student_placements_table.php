@@ -17,7 +17,6 @@ return new class extends Migration
             $table->foreignId('internship_id')->constrained()->onDelete('cascade');
             $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending');
             $table->decimal('compatibility_score', 5, 2);
-            $table->text('admin_notes')->nullable();
             $table->timestamp('placement_date')->nullable();
             $table->timestamps();
             

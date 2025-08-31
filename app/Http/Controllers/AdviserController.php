@@ -6,8 +6,10 @@ use App\Models\User;
 use App\Models\Student;
 use App\Models\AcademeAccount;
 use App\Models\StudentScore;
+use App\Models\Section;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -20,10 +22,10 @@ class AdviserController extends Controller
     {
         $adviser = Auth::user();
         
-        // Get the adviser's section from academe_accounts
-        $adviserSection = $adviser->academeAccounts()->with('section')->first();
+        // Get the adviser's section from advisers table
+        $adviserRecord = $adviser->adviser;
         
-        if (!$adviserSection) {
+        if (!$adviserRecord) {
             return Inertia::render('adviser/dashboard', [
                 'stats' => [],
                 'recentAssessments' => [],
@@ -32,7 +34,7 @@ class AdviserController extends Controller
             ]);
         }
 
-        $sectionId = $adviserSection->section_id;
+        $sectionId = $adviserRecord->section_id;
 
         // Get comprehensive statistics
         $stats = $this->getDashboardStats($sectionId);
@@ -47,7 +49,7 @@ class AdviserController extends Controller
             'stats' => $stats,
             'recentAssessments' => $recentAssessments,
             'placementOverview' => $placementOverview,
-            'adviserSection' => $adviserSection->section->section_name ?? null,
+            'adviserSection' => $adviserRecord->section->section_name ?? null,
         ]);
     }
 
@@ -176,10 +178,10 @@ class AdviserController extends Controller
     {
         $adviser = Auth::user();
         
-        // Get the adviser's section from academe_accounts
-        $adviserSection = $adviser->academeAccounts()->with('section')->first();
+        // Get the adviser's section from advisers table
+        $adviserRecord = $adviser->adviser;
         
-        if (!$adviserSection) {
+        if (!$adviserRecord) {
             return Inertia::render('adviser/application', [
                 'pendingStudents' => [],
                 'verifiedStudents' => [],
@@ -187,15 +189,18 @@ class AdviserController extends Controller
             ]);
         }
 
-        // Get pending students (users with student role in the same section who don't have a student record)
+        $sectionId = $adviserRecord->section_id;
+
+        // Get pending students (users with student role in the same section who don't have a student record and have verified email)
         $pendingStudents = User::whereHas('roles', function ($query) {
                 $query->where('name', 'student');
             })
-            ->whereHas('academeAccounts', function ($query) use ($adviserSection) {
-                $query->where('section_id', $adviserSection->section_id);
+            ->whereHas('academeAccounts', function ($query) use ($sectionId) {
+                $query->where('section_id', $sectionId);
             })
             ->whereDoesntHave('student')
             ->where('status', '!=', 'archived')
+            ->whereNotNull('email_verified_at') // Only show email-verified accounts
             ->with(['academeAccounts.section'])
             ->get()
             ->map(function ($user) {
@@ -214,8 +219,8 @@ class AdviserController extends Controller
         $verifiedStudents = User::whereHas('roles', function ($query) {
                 $query->where('name', 'student');
             })
-            ->whereHas('academeAccounts', function ($query) use ($adviserSection) {
-                $query->where('section_id', $adviserSection->section_id);
+            ->whereHas('academeAccounts', function ($query) use ($sectionId) {
+                $query->where('section_id', $sectionId);
             })
             ->whereHas('student')
             ->where('status', '!=', 'archived')
@@ -236,7 +241,7 @@ class AdviserController extends Controller
         return Inertia::render('adviser/application', [
             'pendingStudents' => $pendingStudents,
             'verifiedStudents' => $verifiedStudents,
-            'adviserSection' => $adviserSection->section->section_name ?? null,
+            'adviserSection' => $adviserRecord->section->section_name ?? null,
         ]);
     }
 
@@ -452,17 +457,17 @@ class AdviserController extends Controller
     {
         $adviser = Auth::user();
         
-        // Get the adviser's section from academe_accounts
-        $adviserSection = $adviser->academeAccounts()->with('section')->first();
+        // Get the adviser's section from advisers table
+        $adviserRecord = $adviser->adviser;
         
-        if (!$adviserSection) {
+        if (!$adviserRecord) {
             return Inertia::render('adviser/students', [
                 'students' => [],
                 'adviserSection' => null,
             ]);
         }
 
-        $sectionId = $adviserSection->section_id;
+        $sectionId = $adviserRecord->section_id;
 
         // Get all students in the section with their details
         $students = User::whereHas('roles', function ($query) {
@@ -497,7 +502,7 @@ class AdviserController extends Controller
                         'assessmentScore' => $totalScore,
                         'assessmentPercentage' => $percentage,
                         'assessmentSubmittedAt' => $student->updated_at->format('M d, Y'),
-                        'isPlaced' => false, // Will be implemented when student matches are added
+                        'isPlaced' => $student->is_placed || $student->placements()->where('status', 'approved')->exists(),
                         'placement' => null,
                         'categories' => $student->scores->groupBy('subcategory.category.category_name')
                             ->map(function ($scores, $categoryName) {
@@ -519,7 +524,7 @@ class AdviserController extends Controller
                         'assessmentScore' => 0,
                         'assessmentPercentage' => 0,
                         'assessmentSubmittedAt' => null,
-                        'isPlaced' => false,
+                        'isPlaced' => $student ? ($student->is_placed || $student->placements()->where('status', 'approved')->exists()) : false,
                         'placement' => null,
                         'categories' => [],
                     ];
@@ -531,7 +536,9 @@ class AdviserController extends Controller
 
         return Inertia::render('adviser/students', [
             'students' => $students,
-            'adviserSection' => $adviserSection->section->section_name ?? null,
+            'adviserSection' => $adviserRecord->section->section_name ?? null,
         ]);
     }
+
+
 }

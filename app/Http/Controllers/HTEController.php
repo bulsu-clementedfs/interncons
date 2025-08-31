@@ -37,10 +37,12 @@ class HTEController extends Controller
     {
         $user = Auth::user();
         
-        if ($user->hte) {
+        // If user has HTE record and has submitted the form, redirect to profile
+        if ($user->hte && $user->hte->is_submit) {
             return redirect()->route('hte.profile');
         }
 
+        // Allow access to form if user has HTE record but hasn't submitted yet
         return Inertia::render('hte/form');
     }
 
@@ -49,28 +51,46 @@ class HTEController extends Controller
      */
     public function submit(Request $request): RedirectResponse
     {
-        // Check if user already has an HTE
+        // Debug: Log the incoming request data FIRST
+        Log::info('HTE Form Submission - Request Received:', [
+            'method' => $request->method(),
+            'url' => $request->url(),
+            'all_request_data' => $request->all(),
+            'user_id' => Auth::id(),
+            'has_hte' => Auth::user()->hte ? 'yes' : 'no'
+        ]);
+
+        // Check if user has already submitted the HTE form
         $user = Auth::user();
-        if ($user->hte) {
+        if ($user->hte && $user->hte->is_submit) {
+            Log::warning('HTE Form Submission - User already submitted HTE form:', ['user_id' => $user->id, 'hte_id' => $user->hte->id, 'is_submit' => $user->hte->is_submit]);
             return redirect()->back()->withErrors(['error' => 'You have already submitted an HTE form. You cannot submit multiple forms.']);
         }
 
         // Validate the request
-        $request->validate([
-            'companyName' => 'required|string|max:100',
-            'contactPerson' => 'required|string|max:100',
-            'email' => 'required|email|max:100',
-            'phone' => 'required|string|max:50',
-            'address' => 'required|string|max:255',
-            'position' => 'required|string|max:100',
-            'department' => 'required|string|max:100',
-            'numberOfInterns' => 'required|string|max:50',
-            'duration' => 'required|string|max:100',
-            'startDate' => 'required|string|max:50',
-            'endDate' => 'required|string|max:50',
-
-            'subcategoryWeights' => 'required|array',
-        ]);
+        try {
+            $request->validate([
+                'companyName' => 'required|string|max:100',
+                'contactPerson' => 'required|string|max:100',
+                'email' => 'required|email|max:100',
+                'phone' => 'required|string|max:50',
+                'address' => 'required|string|max:255',
+                'position' => 'required|string|max:100',
+                'department' => 'required|string|max:100',
+                'numberOfInterns' => 'required|string|max:50',
+                'duration' => 'required|string|max:100',
+                'startDate' => 'required|string|max:50',
+                'endDate' => 'required|string|max:50',
+                'subcategoryWeights' => 'required|array',
+            ]);
+            Log::info('HTE Form Submission - Validation passed');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('HTE Form Submission - Validation failed:', [
+                'errors' => $e->errors(),
+                'request_data' => $request->all()
+            ]);
+            throw $e;
+        }
 
         // Debug: Log the incoming request data
         Log::info('HTE Form Submission - Request Data:', [
@@ -80,58 +100,99 @@ class HTEController extends Controller
         ]);
 
         try {
-            // Create HTE record
-            $hte = HTE::create([
-                'user_id' => $user->id,
-                'company_name' => $request->companyName,
-                'company_address' => $request->address,
-                'company_email' => $request->email,
-                'cperson_fname' => $request->contactPerson,
-                'cperson_lname' => '',
-                'cperson_position' => $request->position,
-                'cperson_contactnum' => $request->phone,
-                'is_active' => true,
-                'is_submit' => true,
-            ]);
+            // Create or update HTE record
+            if ($user->hte) {
+                // Update existing HTE record
+                $hte = $user->hte;
+                $hte->update([
+                    'company_name' => $request->companyName,
+                    'company_address' => $request->address,
+                    'company_email' => $request->email,
+                    'cperson_fname' => $request->contactPerson,
+                    'cperson_lname' => '',
+                    'cperson_position' => $request->position,
+                    'cperson_contactnum' => $request->phone,
+                    'is_active' => true,
+                    'is_submit' => true,
+                ]);
+                Log::info('HTE Record Updated:', ['hte_id' => $hte->id]);
+            } else {
+                // Create new HTE record
+                $hte = HTE::create([
+                    'user_id' => $user->id,
+                    'company_name' => $request->companyName,
+                    'company_address' => $request->address,
+                    'company_email' => $request->email,
+                    'cperson_fname' => $request->contactPerson,
+                    'cperson_lname' => '',
+                    'cperson_position' => $request->position,
+                    'cperson_contactnum' => $request->phone,
+                    'is_active' => true,
+                    'is_submit' => true,
+                ]);
+                Log::info('HTE Record Created:', ['hte_id' => $hte->id]);
+            }
 
-            Log::info('HTE Record Created:', ['hte_id' => $hte->id]);
+            // Create or update Internship record
+            $existingInternship = $hte->internships()->first();
+            if ($existingInternship) {
+                // Update existing internship
+                $internship = $existingInternship;
+                $internship->update([
+                    'position_title' => $request->position,
+                    'department' => $request->department,
+                    'placement_description' => 'Internship opportunity at ' . $request->companyName . ' - Duration: ' . $request->duration . ' from ' . $request->startDate . ' to ' . $request->endDate,
+                    'slot_count' => (int) $request->numberOfInterns,
+                    'is_active' => true,
+                ]);
+                Log::info('Internship Record Updated:', ['internship_id' => $internship->id]);
+            } else {
+                // Create new internship
+                $internship = Internship::create([
+                    'hte_id' => $hte->id,
+                    'position_title' => $request->position,
+                    'department' => $request->department,
+                    'placement_description' => 'Internship opportunity at ' . $request->companyName . ' - Duration: ' . $request->duration . ' from ' . $request->startDate . ' to ' . $request->endDate,
+                    'slot_count' => (int) $request->numberOfInterns,
+                    'is_active' => true,
+                ]);
+                Log::info('Internship Record Created:', ['internship_id' => $internship->id]);
+            }
 
-            // Create Internship record
-            $internship = Internship::create([
-                'hte_id' => $hte->id,
-                'position_title' => $request->position,
-                'department' => $request->department,
-                'placement_description' => 'Internship opportunity at ' . $request->companyName . ' - Duration: ' . $request->duration . ' from ' . $request->startDate . ' to ' . $request->endDate,
-                'slot_count' => (int) $request->numberOfInterns,
-                'is_active' => true,
-            ]);
-
-            Log::info('Internship Record Created:', ['internship_id' => $internship->id]);
-
-            // Store subcategory weights
+            // Store subcategory weights (delete existing ones first if updating)
+            if ($existingInternship) {
+                // Delete existing weights when updating
+                $internship->subcategoryWeights()->delete();
+                Log::info('Deleted existing subcategory weights for internship:', ['internship_id' => $internship->id]);
+            }
+            
             $weightsCreated = 0;
-            foreach ($request->subcategoryWeights as $subcategoryId => $weight) {
-                try {
-                    $subcategoryWeight = SubcategoryWeight::create([
-                        'internship_id' => $internship->id,
-                        'subcategory_id' => $subcategoryId,
-                        'weight' => (int) $weight,
-                    ]);
-                    $weightsCreated++;
-                    Log::info('Subcategory Weight Created:', [
-                        'id' => $subcategoryWeight->id,
-                        'internship_id' => $internship->id,
-                        'subcategory_id' => $subcategoryId,
-                        'weight' => $weight
-                    ]);
-                } catch (\Exception $e) {
-                    Log::error('Failed to create subcategory weight:', [
-                        'subcategory_id' => $subcategoryId,
-                        'weight' => $weight,
-                        'error' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString()
-                    ]);
+            if ($request->subcategoryWeights && is_array($request->subcategoryWeights)) {
+                foreach ($request->subcategoryWeights as $subcategoryId => $weight) {
+                    try {
+                        $subcategoryWeight = SubcategoryWeight::create([
+                            'internship_id' => $internship->id,
+                            'subcategory_id' => $subcategoryId,
+                            'weight' => (int) $weight,
+                        ]);
+                        $weightsCreated++;
+                        Log::info('Subcategory Weight Created:', [
+                            'id' => $subcategoryWeight->id,
+                            'internship_id' => $internship->id,
+                            'subcategory_id' => $subcategoryId,
+                            'weight' => $weight
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::error('Failed to create subcategory weight:', [
+                            'subcategory_id' => $subcategoryId,
+                            'weight' => $weight,
+                            'error' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString()
+                        ]);
+                    }
                 }
+            } else {
+                Log::warning('No subcategory weights provided in request');
             }
 
             Log::info('Subcategory Weights Summary:', [
@@ -220,10 +281,7 @@ class HTEController extends Controller
             return redirect()->route('form');
         }
 
-        // Check if HTE has submitted the assessment form
-        if (!$hte->is_submit) {
-            return redirect()->route('form')->with('warning', 'Please complete the assessment form first before accessing your profile.');
-        }
+        // Allow access to profile even if not submitted, but show prompt
 
         // Get HTE with related data including categories
         $hteWithData = HTE::with([
@@ -259,7 +317,8 @@ class HTEController extends Controller
         ]);
 
         return Inertia::render('hte/profile', [
-            'hte' => $hteWithData
+            'hte' => $hteWithData,
+            'showSubmissionPrompt' => !$hte->is_submit
         ]);
     }
 
@@ -275,10 +334,7 @@ class HTEController extends Controller
             return redirect()->route('form');
         }
 
-        // Check if HTE has submitted the assessment form
-        if (!$hte->is_submit) {
-            return redirect()->route('form')->with('warning', 'Please complete the assessment form first before accessing the dashboard.');
-        }
+        // Allow access to dashboard even if not submitted, but show prompt
 
         // Get comprehensive dashboard data
         $dashboardData = HTE::with([
@@ -332,6 +388,7 @@ class HTEController extends Controller
                 'phone' => $dashboardData->cperson_contactnum,
                 'address' => $dashboardData->company_address,
             ],
+            'showSubmissionPrompt' => !$hte->is_submit
         ]);
     }
 
@@ -454,64 +511,7 @@ class HTEController extends Controller
         }
     }
 
-    /**
-     * Show Internship details
-     */
-    public function showInternship($id)
-    {
-        $user = Auth::user();
-        $hte = $user->hte;
-        
-        if (!$hte) {
-            return redirect()->route('form');
-        }
 
-        // Check if HTE has submitted the assessment form
-        if (!$hte->is_submit) {
-            return redirect()->route('form')->with('warning', 'Please complete the assessment form first before viewing internship details.');
-        }
-
-        // Get the internship with its weights and related data
-        $internship = Internship::with(['subcategoryWeights.subcategory.category'])
-            ->where('id', $id)
-            ->where('hte_id', $hte->id)
-            ->first();
-
-        if (!$internship) {
-            return redirect()->route('hte.dashboard')->withErrors(['error' => 'Internship not found.']);
-        }
-
-        // Transform the data for display
-        $internshipData = [
-            'id' => $internship->id,
-            'position_title' => $internship->position_title,
-            'department' => $internship->department,
-            'slot_count' => $internship->slot_count,
-            'placement_description' => $internship->placement_description,
-            'is_active' => $internship->is_active,
-            'created_at' => $internship->created_at,
-            'updated_at' => $internship->updated_at,
-            'subcategory_weights' => $internship->subcategoryWeights->map(function($weight) {
-                return [
-                    'id' => $weight->id,
-                    'weight' => $weight->weight,
-                    'subcategory' => [
-                        'id' => $weight->subcategory->id,
-                        'subcategory_name' => $weight->subcategory->subcategory_name,
-                        'category' => [
-                            'id' => $weight->subcategory->category->id,
-                            'category_name' => $weight->subcategory->category->category_name,
-                        ]
-                    ]
-                ];
-            })->toArray()
-        ];
-
-        return Inertia::render('hte/internship-profile', [
-            'hte' => $hte,
-            'internship' => $internshipData
-        ]);
-    }
 
     /**
      * Show Edit Internship form

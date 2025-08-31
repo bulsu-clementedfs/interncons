@@ -15,17 +15,20 @@ import {
     PrinterIcon,
     UserIcon,
     PlusIcon,
-    TargetIcon
+    CalendarIcon,
+    FileTextIcon
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const roleBasedNav: Record<string, { main: NavItem[]; footer: NavItem[] }> = {
     admin: {
         main: [
+
+            { title: 'Dashboard', href: '/admin-dashboard', icon: ClipboardIcon },
             {
                 title: 'Student',
                 href: '/student',
-                icon: ClipboardIcon,
+                icon: ClipboardListIcon,
                 subNav: [
                     { title: 'List', href: '/student/list' },
                     { title: 'Match', href: '/student/matched' },
@@ -33,6 +36,9 @@ const roleBasedNav: Record<string, { main: NavItem[]; footer: NavItem[] }> = {
                 ],
             },
             { title: 'HTE', href: '/hte', icon: UserIcon },
+            { title: 'Adviser', href: '/adviser', icon: PersonStandingIcon },
+            { title: 'Forms', href: '/admin/forms', icon: FileTextIcon },
+            { title: 'Events', href: '/admin/events', icon: CalendarIcon },
             { title: 'Reports', href: '/report', icon: PrinterIcon },
         ],
         footer: [],

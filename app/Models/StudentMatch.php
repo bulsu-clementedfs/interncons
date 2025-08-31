@@ -15,6 +15,7 @@ class StudentMatch extends Model
         'internship_id',
         'rank',
         'compatibility_score',
+        'status',
     ];
 
     protected $casts = [
@@ -84,6 +85,54 @@ class StudentMatch extends Model
     public function scopeAboveScore($query, $score)
     {
         return $query->where('compatibility_score', '>=', $score);
+    }
+
+    /**
+     * Scope to get matches with a specific status
+     */
+    public function scopeWithStatus($query, $status)
+    {
+        return $query->where('status', $status);
+    }
+
+    /**
+     * Scope to get non-rejected matches (pending and approved)
+     */
+    public function scopeNotRejected($query)
+    {
+        return $query->whereIn('status', ['pending', 'approved']);
+    }
+
+    /**
+     * Scope to get rejected matches
+     */
+    public function scopeRejected($query)
+    {
+        return $query->where('status', 'rejected');
+    }
+
+    /**
+     * Check if the match is rejected
+     */
+    public function isRejected(): bool
+    {
+        return $this->status === 'rejected';
+    }
+
+    /**
+     * Check if the match is approved
+     */
+    public function isApproved(): bool
+    {
+        return $this->status === 'approved';
+    }
+
+    /**
+     * Check if the match is pending
+     */
+    public function isPending(): bool
+    {
+        return $this->status === 'pending';
     }
 
     /**

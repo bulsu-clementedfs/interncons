@@ -25,6 +25,7 @@ class User extends Authenticatable
         'email',
         'password',
         'status',
+        'email_verification_token',
     ];
 
     /**
@@ -60,8 +61,37 @@ class User extends Authenticatable
         return $this->hasMany(AcademeAccount::class);
     }
 
+    public function studentAcademeAccounts(): HasMany
+    {
+        return $this->hasMany(AcademeAccount::class)->whereHas('user.roles', function($q) {
+            $q->where('name', 'student');
+        });
+    }
+
     public function hte(): HasOne
     {
         return $this->hasOne(HTE::class, 'user_id');
+    }
+
+    public function adviser(): HasOne
+    {
+        return $this->hasOne(Adviser::class);
+    }
+
+    /**
+     * Check if the user is a student
+     */
+    public function isStudent(): bool
+    {
+        return $this->hasRole('student');
+    }
+
+    /**
+     * Check if the user requires email verification
+     * Only students require email verification
+     */
+    public function requiresEmailVerification(): bool
+    {
+        return $this->isStudent();
     }
 }

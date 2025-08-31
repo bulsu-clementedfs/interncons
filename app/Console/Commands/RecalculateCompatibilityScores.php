@@ -3,8 +3,25 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
+use App\Models\Student;
+use App\Models\Internship;
+use App\Models\StudentScore;
+use App\Models\SubcategoryWeight;
 use App\Services\MatchingService;
 
+/**
+ * Command to recalculate compatibility scores for all students
+ * 
+ * Usage: php artisan recalculate:scores
+ * 
+ * This command:
+ * 1. Clears all existing compatibility scores
+ * 2. Recalculates scores based on current criteria and weights
+ * 3. Updates the database with new scores
+ * 
+ * Note: Consider adding a session:clear command to help with CSRF token issues:
+ * php artisan session:clear
+ */
 class RecalculateCompatibilityScores extends Command
 {
     /**

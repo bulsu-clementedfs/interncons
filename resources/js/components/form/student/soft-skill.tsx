@@ -27,7 +27,15 @@ export default function SoftSkill() {
         const fetchSoftSkills = async () => {
             try {
                 setLoading(true);
-                const response = await fetch('/assessment/soft-skills');
+                const response = await fetch('/assessment/soft-skills', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin',
+                });
                 if (!response.ok) {
                     throw new Error('Failed to fetch data');
                 }

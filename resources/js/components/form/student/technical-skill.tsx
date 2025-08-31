@@ -27,7 +27,15 @@ export default function TechnicalSkill() {
         const fetchTechnicalSkills = async () => {
             try {
                 setLoading(true);
-                const response = await fetch('/assessment/technical-skills');
+                const response = await fetch('/assessment/technical-skills', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin',
+                });
                 if (!response.ok) {
                     throw new Error('Failed to fetch data');
                 }
