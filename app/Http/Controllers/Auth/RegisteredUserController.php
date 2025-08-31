@@ -7,6 +7,7 @@ use App\Models\AcademeAccount;
 use App\Models\Request as RequestModel;
 use App\Models\Section;
 use App\Models\User;
+use App\Services\EmailVerificationService;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,6 +19,13 @@ use Inertia\Response;
 
 class RegisteredUserController extends Controller
 {
+    protected EmailVerificationService $emailVerificationService;
+
+    public function __construct(EmailVerificationService $emailVerificationService)
+    {
+        $this->emailVerificationService = $emailVerificationService;
+    }
+
     /**
      * Show the registration page.
      */
@@ -56,6 +64,7 @@ class RegisteredUserController extends Controller
             'username' => $request->username,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+            'status' => 'unverified', // Set as unverified until email verification
         ]);
 
         $user->assignRole('student');
@@ -71,8 +80,11 @@ class RegisteredUserController extends Controller
             'section_id' => $request->section_id,
         ]);
 
+        // Send email verification
+        $this->emailVerificationService->sendVerificationEmail($user);
+
         event(new Registered($user));
 
-        return redirect()->route('login')->with('status', 'Registration successful! Please log in to continue.');
+        return redirect()->route('login')->with('status', 'Registration successful! Please check your email and verify your account before logging in.');
     }
 }

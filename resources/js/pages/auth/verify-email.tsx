@@ -1,41 +1,82 @@
-// Components
 import { Head, useForm } from '@inertiajs/react';
-import { LoaderCircle } from 'lucide-react';
 import { FormEventHandler } from 'react';
-
-import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
-import AuthLayout from '@/layouts/auth-layout';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Mail, RefreshCw } from 'lucide-react';
 
-export default function VerifyEmail({ status }: { status?: string }) {
-    const { post, processing } = useForm({});
+export default function VerifyEmail() {
+    const { post, processing, recentlySuccessful } = useForm({});
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-
-        post(route('verification.send'));
+        post(route('email.resend'));
     };
 
     return (
-        <AuthLayout title="Verify email" description="Please verify your email address by clicking on the link we just emailed to you.">
-            <Head title="Email verification" />
+        <>
+            <Head title="Email Verification" />
+            
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+                <div className="max-w-md w-full space-y-8">
+                    <Card>
+                        <CardHeader className="text-center">
+                            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
+                                <Mail className="h-6 w-6 text-blue-600" />
+                            </div>
+                            <CardTitle className="text-2xl font-bold text-gray-900">
+                                Verify Your Email
+                            </CardTitle>
+                            <CardDescription className="text-gray-600">
+                                Thanks for signing up! Before getting started, could you verify your email address by clicking on the link we just emailed to you? If you didn't receive the email, we will gladly send you another.
+                            </CardDescription>
+                        </CardHeader>
+                        
+                        <CardContent className="space-y-6">
+                            {recentlySuccessful && (
+                                <Alert>
+                                    <AlertDescription>
+                                        A new verification link has been sent to your email address.
+                                    </AlertDescription>
+                                </Alert>
+                            )}
 
-            {status === 'verification-link-sent' && (
-                <div className="mb-4 text-center text-sm font-medium text-green-600">
-                    A new verification link has been sent to the email address you provided during registration.
+                            <form onSubmit={submit} className="space-y-4">
+                                <Button 
+                                    type="submit" 
+                                    disabled={processing}
+                                    className="w-full"
+                                >
+                                    {processing ? (
+                                        <>
+                                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                            Sending...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Mail className="mr-2 h-4 w-4" />
+                                            Resend Verification Email
+                                        </>
+                                    )}
+                                </Button>
+                            </form>
+
+                            <div className="text-center">
+                                <p className="text-sm text-gray-600">
+                                    Didn't receive the email? Check your spam folder or{' '}
+                                    <button
+                                        onClick={submit}
+                                        disabled={processing}
+                                        className="text-blue-600 hover:text-blue-500 font-medium"
+                                    >
+                                        click here to resend
+                                    </button>
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
-            )}
-
-            <form onSubmit={submit} className="space-y-6 text-center">
-                <Button disabled={processing} variant="secondary">
-                    {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                    Resend verification email
-                </Button>
-
-                <TextLink href={route('logout')} method="post" className="mx-auto block text-sm">
-                    Log out
-                </TextLink>
-            </form>
-        </AuthLayout>
+            </div>
+        </>
     );
 }

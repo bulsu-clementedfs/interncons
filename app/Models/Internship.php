@@ -5,13 +5,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Internship extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'h_t_e_id',
+        'hte_id',
         'position_title',
         'department',
         'placement_description',
@@ -29,7 +30,41 @@ class Internship extends Model
      */
     public function hte(): BelongsTo
     {
-        return $this->belongsTo(HTE::class, 'h_t_e_id');
+        return $this->belongsTo(HTE::class, 'hte_id', 'id');
+    }
+
+
+
+    /**
+     * Get the subcategory weights for this internship.
+     */
+    public function subcategoryWeights(): HasMany
+    {
+        return $this->hasMany(SubcategoryWeight::class);
+    }
+
+    /**
+     * Get all compatibility scores for this internship
+     */
+    public function compatibilityScores(): HasMany
+    {
+        return $this->hasMany(StudentMatch::class);
+    }
+
+    /**
+     * Get actual student placements (approved/rejected) for this internship
+     */
+    public function studentPlacements(): HasMany
+    {
+        return $this->hasMany(StudentPlacement::class);
+    }
+
+    /**
+     * Get the placements for this internship.
+     */
+    public function placements(): HasMany
+    {
+        return $this->hasMany(Placement::class);
     }
 
     /**

@@ -28,7 +28,15 @@ export default function LanguageProficiency() {
         const fetchLanguageProficiency = async () => {
             try {
                 setLoading(true);
-                const response = await fetch('/assessment/language-proficiency');
+                const response = await fetch('/assessment/language-proficiency', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin',
+                });
                 if (!response.ok) {
                     throw new Error('Failed to fetch data');
                 }
